@@ -366,8 +366,7 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
   protected boolean computePriorClassDistribution(){return (_parms._family==Family.multinomial)||(_parms._family==Family.ordinal);}
 
   @Override
-  public void init(boolean expensive) {
-    super.init(expensive);
+  public void init(boolean expensive) {super.init(expensive);
     hide("_balance_classes", "Not applicable since class balancing is not required for GLM.");
     hide("_max_after_balance_size", "Not applicable since class balancing is not required for GLM.");
     hide("_class_sampling_factors", "Not applicable since class balancing is not required for GLM.");
@@ -793,7 +792,61 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       _state.updateState(beta, l);
     }
 
+    private void fitCOD_binomial(Solver s) {
+      double [] betaCnd = _state.beta(); // store newly calculated beta
+      double [] betaCndOld = _state.beta();
+      LineSearchSolver ls = null;
+      boolean firstIter = true;
+      int iterCnt = 0;
+      try {
+        while (true) {
+          iterCnt++;
+          long t1 = System.currentTimeMillis();
+          GLMBinomialGradientTask gt = new GLMBinomialGradientTask(_job._key, _dinfo, _parms, _state.l2pen(),betaCnd);
+        //  gt.set_calculateHess(true);
+        //  gt.doAll(_dinfo._adaptedFrame); // will give me grad, invHessDiag, likelihood
+          ComputationState.GramCOD gramCod = _state.computeGramCOD(betaCnd, s);
+          ComputationState.GramXY gram = _state.computeGram(betaCnd,s); // change the beta coefficients here and calculate the likelihood with the new coefficients.
+          long t2 = System.currentTimeMillis();
+          if (!_state._lsNeeded && (Double.isNaN(gram.likelihood) || _state.objective(gram.beta, gram.likelihood) > _state.objective() + _parms._objective_epsilon)) {
+            _state._lsNeeded = true;
+          } else {
+            if (!firstIter && !_state._lsNeeded && !progress(gram.beta, gram.likelihood)) { // assign new beta to _state and new likelihood there.
+              System.out.println("DONE after " + (iterCnt-1) + " iterations (1)");
+              return;
+            }
+            betaCnd = COD_solve(gram,_state._alpha,_state.lambda());
+           // betaCndOld = COD_solve2(gramCod.gram.getXX(),gramCod.grads,gram.newCols,_state._alpha,_state.lambda());
+           // COD_solve(gram.gram.getXX(),gram.xy,gram.getCODGradients(),gram.newCols,alpha,lambda)
+          }
+          firstIter = false;
+          long t3 = System.currentTimeMillis();
+          if(_state._lsNeeded) {
+            if(ls == null)
+              ls = (_state.l1pen() == 0 && !_state.activeBC().hasBounds())
+                      ? new MoreThuente(_state.gslvr(),_state.beta(), _state.ginfo())
+                      : new SimpleBacktrackingLS(_state.gslvr(),_state.beta().clone(), _state.l1pen(), _state.ginfo());
+            if (!ls.evaluate(ArrayUtils.subtract(betaCnd, ls.getX(), betaCnd))) {
+              Log.info(LogMsg("Ls failed " + ls));
+              return;
+            }
+            betaCnd = ls.getX();
+            if(!progress(betaCnd,ls.ginfo()))
+              return;
+            long t4 = System.currentTimeMillis();
+            Log.info(LogMsg("computed in " + (t2 - t1) + "+" + (t3 - t2) + "+" + (t4 - t3) + "=" + (t4 - t1) + "ms, step = " + ls.step() + ((_lslvr != null) ? ", l1solver " + _lslvr : "")));
+          } else
+            Log.info(LogMsg("computed in " + (t2 - t1) + "+" + (t3 - t2) + "=" + (t3 - t1) + "ms, step = " + 1 + ((_lslvr != null) ? ", l1solver " + _lslvr : "")));
+        }
+      } catch(NonSPDMatrixException e) {
+        Log.warn(LogMsg("Got Non SPD matrix, stopped."));
+      }
+    }
+
     private void fitIRLSM(Solver s) {
+      if (s.equals(Solver.COORDINATE_DESCENT))
+        fitCOD_binomial(s);  // divert to fitCOD_binomial;
+
       GLMWeightsFun glmw = new GLMWeightsFun(_parms);
       double [] betaCnd = _state.beta();
       LineSearchSolver ls = null;
@@ -1426,6 +1479,67 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
     return grads;
   }
 
+/*  public double[] COD_solve(GLMBinomialGradientTask gt, double alpha, double lambda) {
+    final double betaEpsilon = _parms._beta_epsilon*_parms._beta_epsilon;
+    double updateEpsilon = 0.01*betaEpsilon;
+    double l1pen = lambda * alpha;
+    double [] diagInv = gt._invHessDiag;
+    double [] hess = new double[diagInv.length];
+    for (int index=0; index < hess.length; index++)
+      hess[index] = 1.0/diagInv[index];
+    DataInfo activeData = _state.activeData();
+    final BetaConstraint bc = _state.activeBC();
+    double [] beta = _state.beta().clone(); // copy over beta from _state
+
+    int numStart = activeData.numStart();
+
+    int iter1 = 0;
+    int P = diagInv.length - 1;
+    double maxDiff = 0;
+//    // CD loop
+    while (iter1++ < Math.max(P,500)) {
+      maxDiff = 0;
+      for (int i = 0; i < activeData._cats; ++i) {
+        for(int j = activeData._catOffsets[i]; j < activeData._catOffsets[i+1]; ++j) { // can do in parallel
+          double bd = bc.applyBounds(ADMM.shrinkage(gt._gradient[j], l1pen) * diagInv[j],j); // new beta value here with l1pen is applicable
+          if(bd != 0) {
+            double diff = bd*bd*hess[j];
+            if(diff > maxDiff) maxDiff = diff;
+
+            doUpdateCD(gt._gradient, hess, bd, activeData._catOffsets[i], activeData._catOffsets[i + 1]);
+            beta[j] = b;
+          }
+        }
+      }
+      for (int i = numStart; i < P; ++i) {
+        double b = bc.applyBounds(ADMM.shrinkage(grads[i], l1pen) * diagInv[i],i);
+        double bd = beta[i] - b;
+        double diff = bd * bd * xx[i][i];
+        if (diff > maxDiff) maxDiff = diff;
+        if(diff > updateEpsilon) {
+          doUpdateCD(grads, xx[i], bd, i, i + 1);
+          beta[i] = b;
+        }
+      }
+      // intercept
+      if(_parms._intercept) {
+        double b = bc.applyBounds(grads[P] * wsumInv,P);
+        double bd = beta[P] - b;
+        double diff = bd * bd * xx[P][P];
+        if (diff > maxDiff) maxDiff = diff;
+        doUpdateCD(grads, xx[P], bd, P, P + 1);
+        beta[P] = b;
+      }
+      if (maxDiff < betaEpsilon) // stop if beta not changing much
+        break;
+    }
+    long tend = System.currentTimeMillis();
+    return beta;
+  }*/
+
+
+
+
   public double [] COD_solve(ComputationState.GramXY gram, double alpha, double lambda) {
     double [] res = COD_solve(gram.gram.getXX(),gram.xy,gram.getCODGradients(),gram.newCols,alpha,lambda);
     gram.newCols = new int[0];
@@ -1440,7 +1554,7 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
     double l2pen = lambda*(1-alpha);
     double [] diagInv = MemoryManager.malloc8d(xx.length);
     for(int i = 0; i < diagInv.length; ++i)
-      diagInv[i] = 1.0/(xx[i][i] + l2pen);
+      diagInv[i] = 1.0/(xx[i][i] + l2pen); // store the hessian for each coefficient
     DataInfo activeData = _state.activeData();
     int [][] nzs = new int[activeData.numStart()][];
     int sparseCnt = 0;
@@ -1483,7 +1597,7 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       maxDiff = 0;
       for (int i = 0; i < activeData._cats; ++i) {
         for(int j = activeData._catOffsets[i]; j < activeData._catOffsets[i+1]; ++j) { // can do in parallel
-          double b = bc.applyBounds(ADMM.shrinkage(grads[j], l1pen) * diagInv[j],j); // new beta value here
+          double b = bc.applyBounds(ADMM.shrinkage(grads[j], l1pen) * diagInv[j],j); // new beta value here with l1pen is applicable
           double bd = beta[j] - b;
           if(bd != 0) {
             double diff = bd*bd*xx[j][j];
@@ -1513,6 +1627,100 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       // intercept
       if(_parms._intercept) {
         double b = bc.applyBounds(grads[P] * wsumInv,P);
+        double bd = beta[P] - b;
+        double diff = bd * bd * xx[P][P];
+        if (diff > maxDiff) maxDiff = diff;
+        doUpdateCD(grads, xx[P], bd, P, P + 1);
+        beta[P] = b;
+      }
+      if (maxDiff < betaEpsilon) // stop if beta not changing much
+        break;
+    }
+    long tend = System.currentTimeMillis();
+    return beta;
+  }
+
+  private double [] COD_solve2(double [][] xx, double [] grads, int [] newCols, double alpha, double lambda) {
+    double wsumInv = 1.0/(xx[xx.length-1][xx.length-1]);
+    final double betaEpsilon = _parms._beta_epsilon*_parms._beta_epsilon;
+    double updateEpsilon = 0.01*betaEpsilon;
+    double l1pen = lambda * alpha;
+    double l2pen = lambda*(1-alpha);
+    double [] diagInv = MemoryManager.malloc8d(xx.length);
+    for(int i = 0; i < diagInv.length; ++i)
+      diagInv[i] = 1.0/(xx[i][i] + l2pen); // store the hessian for each coefficient
+    DataInfo activeData = _state.activeData();
+    int [][] nzs = new int[activeData.numStart()][];
+    int sparseCnt = 0;
+    if(nzs.length > 1000) {
+      final int [] nzs_ary = new int[xx.length];
+      for (int i = 0; i < activeData._cats; ++i) {
+        int var_min = activeData._catOffsets[i];
+        int var_max = activeData._catOffsets[i + 1];
+        for(int l = var_min; l < var_max; ++l) {
+          int k = 0;
+          double [] x = xx[l];
+          for (int j = 0; j < var_min; ++j)
+            if (x[j] != 0) nzs_ary[k++] = j;
+          for (int j = var_max; j < activeData.numStart(); ++j)
+            if (x[j] != 0) nzs_ary[k++] = j;
+          if (k < ((nzs_ary.length - var_max + var_min) >> 3)) {
+            sparseCnt++;
+            nzs[l] = Arrays.copyOf(nzs_ary, k);
+          }
+        }
+      }
+    }
+    final BetaConstraint bc = _state.activeBC();
+    double [] beta = _state.beta().clone();
+    int numStart = activeData.numStart();
+    if(newCols != null) {
+      for (int id : newCols) {
+        double b = bc.applyBounds(beta[id]-(ADMM.shrinkage(grads[id], l1pen) * diagInv[id]), id);
+        if (b != 0) {
+          doUpdateCD(grads, xx[id], -b, id, id + 1);
+          beta[id] = b;
+        }
+      }
+    }
+    int iter1 = 0;
+    int P = grads.length - 1;
+    double maxDiff = 0;
+//    // CD loop
+    while (iter1++ < Math.max(P,500)) {
+      maxDiff = 0;
+      for (int i = 0; i < activeData._cats; ++i) {
+        for(int j = activeData._catOffsets[i]; j < activeData._catOffsets[i+1]; ++j) { // can do in parallel
+          double b = bc.applyBounds(beta[j]-(ADMM.shrinkage(grads[j], l1pen) * diagInv[j]),j); // new beta value here with l1pen is applicable
+          double bd = beta[j] - b;
+          if(bd != 0) {
+            double diff = bd*bd*xx[j][j];
+            if(diff > maxDiff) maxDiff = diff;
+            if (nzs[j] == null)
+              doUpdateCD(grads, xx[j], bd, activeData._catOffsets[i], activeData._catOffsets[i + 1]);
+            else {
+              double[] x = xx[j];
+              int[] ids = nzs[j];
+              for (int id : ids) grads[id] += bd * x[id];
+              doUpdateCD(grads, x, bd, 0, activeData.numStart());
+            }
+            beta[j] = b;
+          }
+        }
+      }
+      for (int i = numStart; i < P; ++i) {
+        double b = bc.applyBounds(beta[i]-(ADMM.shrinkage(grads[i], l1pen) * diagInv[i]),i);
+        double bd = beta[i] - b;
+        double diff = bd * bd * xx[i][i];
+        if (diff > maxDiff) maxDiff = diff;
+        if(diff > updateEpsilon) {
+          doUpdateCD(grads, xx[i], bd, i, i + 1);
+          beta[i] = b;
+        }
+      }
+      // intercept
+      if(_parms._intercept) {
+        double b = bc.applyBounds(beta[P]-grads[P] * wsumInv,P);
         double bd = beta[P] - b;
         double diff = bd * bd * xx[P][P];
         if (diff > maxDiff) maxDiff = diff;
@@ -1797,6 +2005,11 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       _likelihood = likelihood;
     }
 
+    public GLMGradientInfo(double likelihood, double objVal, double[] grad, double[] invhessdiag) {
+      super(objVal, grad, invhessdiag);
+      _likelihood = likelihood;
+    }
+
     public String toString(){
       return "GLM grad info: likelihood = " + _likelihood + super.toString();
     }
@@ -1878,9 +2091,12 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         assert beta.length == _dinfo.fullN() + 1;
         assert _parms._intercept || (beta[beta.length-1] == 0);
         GLMGradientTask gt;
-        if(_parms._family == Family.binomial && _parms._link == Link.logit)
-          gt = new GLMBinomialGradientTask(_job == null?null:_job._key,_dinfo,_parms,_l2pen, beta).doAll(_dinfo._adaptedFrame);
-        else if(_parms._family == Family.gaussian && _parms._link == Link.identity)
+        if(_parms._family == Family.binomial && _parms._link == Link.logit) {
+          gt = new GLMBinomialGradientTask(_job == null ? null : _job._key, _dinfo, _parms, _l2pen, beta);
+          if (_parms._solver.equals(Solver.COORDINATE_DESCENT))
+            gt.set_calculateHess(true); // enable the calculation of Hessian matrix
+          gt.doAll(_dinfo._adaptedFrame);
+        } else if(_parms._family == Family.gaussian && _parms._link == Link.identity)
           gt = new GLMGaussianGradientTask(_job == null?null:_job._key,_dinfo,_parms,_l2pen, beta).doAll(_dinfo._adaptedFrame);
         else if(_parms._family == Family.poisson && _parms._link == Link.log)
           gt = new GLMPoissonGradientTask(_job == null?null:_job._key,_dinfo,_parms,_l2pen, beta).doAll(_dinfo._adaptedFrame);
@@ -1889,13 +2105,14 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         else
           gt = new GLMGenericGradientTask(_job == null?null:_job._key, _dinfo, _parms, _l2pen, beta).doAll(_dinfo._adaptedFrame);
         double [] gradient = gt._gradient;
+        double[] invHessDiag = gt instanceof GLMBinomialGradientTask?gt._invHessDiag:null;
         double  likelihood = gt._likelihood;
         if (!_parms._intercept) // no intercept, null the ginfo
           gradient[gradient.length - 1] = 0;
         double obj = likelihood * _parms._obj_reg + .5 * _l2pen * ArrayUtils.l2norm2(beta, true);
         if (_bc != null && _bc._betaGiven != null && _bc._rho != null)
           obj = ProximalGradientSolver.proximal_gradient(gradient, obj, beta, _bc._betaGiven, _bc._rho);
-        return new GLMGradientInfo(likelihood, obj, gradient);
+        return new GLMGradientInfo(likelihood, obj, gradient, invHessDiag);
       }
     }
 

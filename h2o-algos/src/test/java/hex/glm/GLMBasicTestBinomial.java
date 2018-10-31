@@ -1,12 +1,14 @@
 package hex.glm;
 
 import hex.CreateFrame;
+import hex.DataInfo;
 import hex.ModelMetricsBinomialGLM;
 import hex.SplitFrame;
 import hex.deeplearning.DeepLearningModel.DeepLearningParameters.MissingValuesHandling;
 import hex.glm.GLMModel.GLMParameters;
 import hex.glm.GLMModel.GLMParameters.Family;
 import hex.glm.GLMModel.GLMParameters.Solver;
+import hex.optimization.ADMM;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -15,7 +17,6 @@ import water.*;
 import water.exceptions.H2OIllegalArgumentException;
 import water.exceptions.H2OModelBuilderIllegalArgumentException;
 import water.fvec.*;
-import water.util.VecUtils;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -491,11 +492,11 @@ public class GLMBasicTestBinomial extends TestUtil {
    //   train = parse_test_file("smalldata/glm_test/multinomial_3_class.csv");
       train = parse_test_file("smalldata/glm_test/binomial_1000Rows.csv");
       String[] names = train._names;
-      Vec[] en = train.remove(new int[] {0,1,2,3,4,5,6});
+/*      Vec[] en = train.remove(new int[] {0,1,2,3,4,5,6});
       for (int cind = 0; cind <7; cind++) {
         train.add(names[cind], VecUtils.toCategoricalVec(en[cind]));
         Scope.track(en[cind]);
-      }
+      }*/
       Scope.track(train);
       params._response_column = "C79";
       params._train = train._key;
@@ -503,26 +504,32 @@ public class GLMBasicTestBinomial extends TestUtil {
       params._alpha = new double[]{0.5};
       params._objective_epsilon = 1e-6;
       params._beta_epsilon = 1e-4;
-      params._max_iterations = 10; // one iteration
+      params._max_iterations = 1; // one iteration
       params._seed = 12345; // don't think this one matters but set it anyway
       Solver s = Solver.COORDINATE_DESCENT;
       System.out.println("solver = " + s);
       params._solver = s;
       model = new GLM(params).trainModel().get();
       Scope.track_generic(model);
+      DataInfo tinfo = new DataInfo(train.clone(), null, 0, true, DataInfo.TransformType.STANDARDIZE,
+              DataInfo.TransformType.NONE, false, false, false,
+              /* weights */ false, /* offset */ false, /* fold */ false);
+      double[] manualCoeff = getCODCoeff(train, params._alpha[0], params._lambda[0], model._ymu, tinfo,
+              params._response_column, params._max_iterations, false);
 
-      compareGLMCoeffs(model._output._submodels[0].beta, goldenCoeffs, 1e-10);  // compare to original GLM
+      compareGLMCoeffs(model._output._submodels[0].beta, manualCoeff, 1e-10);  // compare to original GLM
     } finally{
       Scope.exit();
     }
   }
+
 
   public void compareGLMCoeffs(double[] coeff1, double[] coeff2, double tol) {
 
     assertTrue(coeff1.length==coeff2.length); // assert coefficients having the same length first
     for (int index=0; index < coeff1.length; index++) {
       assert Math.abs(coeff1[index]-coeff2[index]) < tol :
-              "coefficient difference "+Math.abs(coeff1[index]-coeff2[index])+" in row "+ index+" exceeded tolerance of "+tol;
+              "coefficient difference "+Math.abs(coeff1[index]-coeff2[index])+" exceeded tolerance of "+tol;
     }
   }
 
@@ -602,6 +609,66 @@ public class GLMBasicTestBinomial extends TestUtil {
       }
     }
   }
+
+  public double[] getCODCoeff(Frame train, double alpha, double lambda, double[] ymu, DataInfo tinfo, String responseCol, int iterations, boolean standardize) {
+    int numClass = 2;
+    int numPred = train.numCols() - 1;
+    int numRow = (int) train.numRows();
+    double[] beta = new double[numPred + 1];
+    double reg = 1.0 / train.numRows();
+    beta[beta.length - 1] = Math.log(ymu[0]);
+
+    for (int iter = 0; iter < iterations; iter++) {
+      // update beta
+
+      for (int pindex = 0; pindex < numPred; pindex++) {
+        double grad = 0;
+        double hess = 0;
+
+        for (int rindex = 0; rindex < numRow; rindex++) {
+          int resp = (int) train.vec(responseCol).at(rindex);
+          double predProb = calProb(train, rindex, beta, numPred, tinfo, standardize);
+          double entry = standardize?train.vec(pindex).at(rindex) * tinfo._normMul[pindex]:train.vec(pindex).at(rindex);
+          grad -= entry * (resp - predProb);
+          hess += entry * entry * (predProb - predProb * predProb); // hess calculation is correct
+        }
+        grad = grad * reg + lambda * (1 - alpha) * beta[pindex]; // add l2 penalty
+        hess = hess * reg + lambda * (1 - alpha);
+        beta[pindex] -= ADMM.shrinkage(grad, lambda * alpha) / hess;
+      }
+
+      double grad = 0;
+      double hess = 0;
+      // change the intercept term here
+      for (int rindex = 0; rindex < numRow; rindex++) {
+        int resp = (int) train.vec(responseCol).at(rindex);
+
+        double predProb = calProb(train, rindex, beta, numPred, tinfo, standardize);
+        grad -= (resp - predProb);
+        hess += (predProb - predProb * predProb);
+
+      }
+      grad *= reg;
+      hess *= reg;
+      beta[beta.length - 1] -= grad / hess;
+
+    }
+    return beta;
+  }
+
+  public double calProb(Frame train, int rowIndex, double[] beta, int numPred, DataInfo tinfo, boolean standardize) {
+    int lastPredIndex = beta.length - 1;
+    double temp = 0;
+    for (int pindex = 0; pindex < numPred; pindex++) {
+      double entry = standardize?(train.vec(pindex).at(rowIndex) - tinfo._numMeans[pindex]) * tinfo._normMul[pindex]:
+              train.vec(pindex).at(rowIndex);
+      temp += entry * beta[pindex];
+    }
+    temp += beta[lastPredIndex];
+
+    return 1.0/(1.0+Math.exp(-1.0*temp));
+  }
+
 
   @Test
   public void testWeights() {
