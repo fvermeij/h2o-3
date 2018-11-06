@@ -81,6 +81,7 @@ public class h2odriver extends Configured implements Tool {
   final static String DEFAULT_ARGS_CONFIG = "h2odriver";
   final static String ARGS_CONFIG_PROP = "ai.h2o.args.config";
   final static String DRIVER_JOB_CALL_TIMEOUT_SEC = "ai.h2o.driver.call.timeout";
+  private static final int GEN_PASSWORD_LENGTH = 16;
 
   static {
       if(!JAVA_VERSION.isKnown()) {
@@ -163,6 +164,10 @@ public class h2odriver extends Configured implements Tool {
   volatile String clusterIp = null;
   volatile int clusterPort = -1;
   volatile String flatfileContent = null;
+
+  private static Credentials make(String user) {
+    return Credentials.make(user, SecurityUtils.passwordGenerator(GEN_PASSWORD_LENGTH));
+  }
 
   public void setShutdownRequested() {
     shutdownRequested = true;
@@ -1581,7 +1586,7 @@ public class h2odriver extends Configured implements Tool {
     }
 
     // Proxy
-    final Credentials proxyCredentials = proxy ? Credentials.make(userName) : null;
+    final Credentials proxyCredentials = proxy ? make(userName) : null;
     final String hashFileEntry = proxyCredentials != null ? proxyCredentials.toHashFileEntry() : null;
 //    H2OServletContainerLoader.INSTANCE.getHashFileEntry()
     if (hashFileEntry != null) {
