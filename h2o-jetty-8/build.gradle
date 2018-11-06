@@ -1,5 +1,6 @@
 dependencies {
-    compile project(":h2o-core")
+    compile project(":h2o-webserver-iface")
+    compile project(":h2o-core") // TODO this needs to be removed otherwise the whole iface thing makes no sense
     compile "org.eclipse.jetty.aggregate:jetty-servlet:8.1.17.v20150415"
     compile "org.eclipse.jetty:jetty-plus:8.1.17.v20150415"
     compile "org.eclipse.jetty.aggregate:jetty-all-server:8.1.17.v20150415"
