@@ -8,7 +8,7 @@ package water.server;
  * This interface is supposed to hide all those dependencies.
  */
 public interface H2OServletContainerFacade {
-  H2OServletContainer createServletContainer();
+  H2OServletContainer createServletContainer(WebServerConfig params);
 
-  String startProxy(String[] otherArgs, Credentials proxyCredentials, String clusterUrl, boolean reportHostname);
+  H2OProxy createProxy(WebServerConfig args, Credentials credentials, String proxyTo);
 }

@@ -3,6 +3,8 @@ package water.init;
 import water.H2O;
 import water.H2ONode;
 import water.server.H2OServletContainerLoader;
+import water.server.ServletUtils;
+import water.server.WebServerConfig;
 import water.util.Log;
 import water.util.NetworkUtils;
 import water.util.StringUtils;
@@ -28,6 +30,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -67,7 +70,7 @@ public class NetworkInit {
 
     // Late instantiation of Jetty object, if needed.
     if (H2O.getServletContainer() == null && !H2O.ARGS.disable_web) {
-      H2O.setServletContainer(H2OServletContainerLoader.INSTANCE.createServletContainer());
+      H2O.setServletContainer(H2OServletContainerLoader.INSTANCE.createServletContainer(webServerParams(H2O.ARGS)));
     }
 
     // API socket is only used to find opened port on given ip.
@@ -186,6 +189,35 @@ public class NetworkInit {
       Log.throwErr(e);
     }
     H2O.CLOUD_MULTICAST_PORT = NetworkUtils.getMulticastPort(hash);
+  }
+
+  public static WebServerConfig webServerParams(H2O.OptArgs args) {
+    final WebServerConfig params = new WebServerConfig();
+    params.jks = args.jks;
+    params.jks_pass = args.jks_pass;
+    params.hash_login = args.hash_login;
+    params.ldap_login = args.ldap_login;
+    params.kerberos_login = args.kerberos_login;
+    params.pam_login = args.pam_login;
+    params.login_conf = args.login_conf;
+    params.form_auth = args.form_auth;
+    params.session_timeout = args.session_timeout;
+    params.user_name = args.user_name;
+    params.port = args.port;
+    params.baseport = args.baseport;
+    params.web_ip = args.web_ip;
+    params.ip = args.ip;
+    params.network = args.network;
+    params.context_path = args.context_path;
+
+    params.h2oExtendedHeaders = new LinkedHashMap<>();
+    params.h2oExtendedHeaders.put("X-h2o-build-project-version", H2O.ABV.projectVersion());
+    params.h2oExtendedHeaders.put("X-h2o-rest-api-version-max", Integer.toString(water.api.RequestServer.H2O_REST_API_VERSION));
+    params.h2oExtendedHeaders.put("X-h2o-cluster-id", Long.toString(H2O.CLUSTER_ID));
+    params.h2oExtendedHeaders.put("X-h2o-cluster-good", Boolean.toString(H2O.CLOUD.healthy()));
+    params.h2oExtendedHeaders.put("X-h2o-context-path", ServletUtils.sanatizeContextPath(H2O.ARGS.context_path));
+
+    return params;
   }
 
   /**

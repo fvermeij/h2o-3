@@ -6,16 +6,17 @@ import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
-import water.H2O;
 import water.server.Credentials;
+import water.server.H2OProxy;
+import water.server.WebServerConfig;
 
-public class Jetty8Proxy extends AbstractJetty8HTTPD {
+public class Jetty8Proxy extends AbstractJetty8HTTPD implements H2OProxy {
 
   private final String _proxyTo;
   private final Credentials _credentials;
 
-  Jetty8Proxy(H2O.BaseArgs args, Credentials credentials, String proxyTo) {
-    super(args);
+  public Jetty8Proxy(WebServerConfig params, Credentials credentials, String proxyTo) {
+    super(params);
     _proxyTo = proxyTo;
     _credentials = credentials;
   }

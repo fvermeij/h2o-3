@@ -176,7 +176,7 @@ public class ServletUtils {
     response.setHeader("X-h2o-context-path", sanatizeContextPath(H2O.ARGS.context_path));
   }
 
-  private static String sanatizeContextPath(String context_path) {
+  public static String sanatizeContextPath(String context_path) {
     if(null == context_path || context_path.isEmpty()) {
       return "/";
     }

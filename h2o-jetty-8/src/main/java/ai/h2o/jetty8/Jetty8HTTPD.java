@@ -16,6 +16,7 @@ import water.api.RequestServer;
 import water.server.H2OServletContainer;
 import water.server.RequestAuthExtension;
 import water.server.ServletUtils;
+import water.server.WebServerConfig;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -37,8 +38,8 @@ public class Jetty8HTTPD extends AbstractJetty8HTTPD implements H2OServletContai
   /**
    * Create bare Jetty object.
    */
-  Jetty8HTTPD() {
-    super(H2O.ARGS);
+  public Jetty8HTTPD(WebServerConfig webServerConfig) {
+    super(webServerConfig);
   }
 
   public void acceptRequests() {

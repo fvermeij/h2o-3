@@ -24,6 +24,7 @@ import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import water.H2O;
+import water.server.WebServerConfig;
 import water.util.Log;
 
 import javax.servlet.http.HttpServletRequest;
@@ -33,7 +34,7 @@ import java.util.Collections;
 
 public abstract class AbstractJetty8HTTPD {
 
-  private final H2O.BaseArgs _args;
+  protected final WebServerConfig _args;
 
   private String _ip;
   private int _port;
@@ -41,7 +42,7 @@ public abstract class AbstractJetty8HTTPD {
   // Jetty server object.
   private Server _server;
 
-  protected AbstractJetty8HTTPD(H2O.BaseArgs args) {
+  protected AbstractJetty8HTTPD(WebServerConfig args) {
     _args = args;
   }
 
