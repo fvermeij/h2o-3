@@ -24,7 +24,6 @@ import org.eclipse.jetty.server.ssl.SslSocketConnector;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
-import water.H2O;
 import water.util.Log;
 
 import javax.servlet.http.HttpServletRequest;
@@ -99,8 +98,7 @@ public abstract class AbstractJetty8HTTPD {
     if (_args.hash_login || _args.ldap_login || _args.kerberos_login || _args.pam_login) {
       // REFER TO http://www.eclipse.org/jetty/documentation/9.1.4.v20140401/embedded-examples.html#embedded-secured-hello-handler
       if (_args.login_conf == null) {
-        Log.err("Must specify -login_conf argument");
-        H2O.exit(1);
+        throw new IllegalArgumentException("Must specify -login_conf argument");
       }
 
       LoginService loginService;
