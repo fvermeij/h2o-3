@@ -739,6 +739,8 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
       x.w = w / (var * d * d); // x.mu*(1-x.mu)
       x.z = eta + (y - x.mu) * d;
       likelihoodAndDeviance(y,x,w);
+      x.prMinresp = w*(x.mu-y);
+      x.prOneMinpr = x.mu*(1-x.mu)*w;
       return x;
     }
 
@@ -749,6 +751,7 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
       double d = linkDeriv(x.mu);
       double temp = x.mu*(1-x.mu);
       x.w = w * (temp < 1e-6?1e-6:temp); // x.mu*(1-x.mu)
+     // x.w = w / (var * d * d);
       x.z = eta + (y - x.mu) * d;
       likelihoodAndDeviance(y,x,w);
       return x;

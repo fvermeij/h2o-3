@@ -785,7 +785,7 @@ public final class ComputationState {
   protected GramCOD computeNewGramCOD(DataInfo activeData, double [] beta, GLMParameters.Solver s){
     double obj_reg = _parms._obj_reg;
     if(_glmw == null) _glmw = new GLMModel.GLMWeightsFun(_parms);
-    GLMTask.GLMIterationTask gt = new GLMTask.GLMIterationTask(_job._key, activeData, _glmw, beta,_activeClass).doAll(activeData._adaptedFrame);
+    GLMTask.GLMIterationTaskCOD gt = new GLMTask.GLMIterationTaskCOD(_job._key, activeData, _glmw, beta,_activeClass).doAll(activeData._adaptedFrame);
     gt._gram.mul(obj_reg);
     ArrayUtils.mult(gt._xy,obj_reg);
     int [] activeCols = activeData.activeCols();

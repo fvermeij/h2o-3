@@ -15,6 +15,7 @@ import water.fvec.C0DChunk;
 import water.fvec.Chunk;
 import water.util.ArrayUtils;
 import water.util.FrameUtils;
+import water.util.Log;
 import water.util.MathUtils;
 import water.util.MathUtils.BasicStats;
 
@@ -1604,6 +1605,8 @@ public abstract class GLMTask  {
       }
       if(_dinfo._intercept)
         _xy[_xy.length-1] += wz;
+
+      Log.info("inside original glm w is : "+w);
       _gram.addRow(r,w);
     }
 
@@ -1736,7 +1739,8 @@ public abstract class GLMTask  {
       }
       if(_dinfo._intercept)
         _xy[_xy.length-1] += wz;
-      _gram.addRow(r,w);
+      Log.info("inside COD speedup glm w is : "+w);
+      _gram.addRow(r,_w.w);
     }
 
     @Override
