@@ -1,5 +1,6 @@
 package water.hadoop;
 
+import ai.h2o.webserver.iface.Credentials;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
@@ -20,7 +21,6 @@ import water.H2O;
 import water.H2OStarter;
 import water.ProxyStarter;
 import water.network.SecurityUtils;
-import water.server.Credentials;
 import water.util.ArrayUtils;
 import water.util.StringUtils;
 

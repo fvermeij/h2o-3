@@ -1,11 +1,11 @@
 package ai.h2o.jetty8;
 
 import ai.h2o.jetty8.proxy.Jetty8Proxy;
-import water.server.Credentials;
-import water.server.H2OProxy;
-import water.server.H2OServletContainer;
-import water.server.H2OServletContainerFacade;
-import water.server.WebServerConfig;
+import ai.h2o.webserver.iface.Credentials;
+import ai.h2o.webserver.iface.H2OProxy;
+import ai.h2o.webserver.iface.H2OServletContainer;
+import ai.h2o.webserver.iface.H2OServletContainerFacade;
+import ai.h2o.webserver.iface.WebServerConfig;
 
 public class Jetty8Facade implements H2OServletContainerFacade {
   @Override

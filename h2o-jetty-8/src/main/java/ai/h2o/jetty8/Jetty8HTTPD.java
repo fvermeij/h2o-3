@@ -1,5 +1,7 @@
 package ai.h2o.jetty8;
 
+import ai.h2o.webserver.iface.H2OServletContainer;
+import ai.h2o.webserver.iface.WebServerConfig;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.handler.AbstractHandler;
@@ -13,10 +15,8 @@ import water.api.NpsBinServlet;
 import water.api.PostFileServlet;
 import water.api.PutKeyServlet;
 import water.api.RequestServer;
-import water.server.H2OServletContainer;
 import water.server.RequestAuthExtension;
 import water.server.ServletUtils;
-import water.server.WebServerConfig;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;

@@ -1,5 +1,6 @@
 package water;
 
+import ai.h2o.webserver.iface.H2OServletContainer;
 import hex.ModelBuilder;
 import jsr166y.CountedCompleter;
 import jsr166y.ForkJoinPool;
@@ -19,7 +20,6 @@ import water.nbhm.NonBlockingHashMap;
 import water.parser.DecryptionTool;
 import water.parser.ParserService;
 import water.persist.PersistManager;
-import water.server.H2OServletContainer;
 import water.server.ServletUtils;
 import water.util.Log;
 import water.util.NetworkUtils;

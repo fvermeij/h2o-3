@@ -1,4 +1,4 @@
-package water.server;
+package ai.h2o.webserver.iface;
 
 /**
  * Facade for servlet container. We typically use Jetty behind this; however, due to use of various major versions,

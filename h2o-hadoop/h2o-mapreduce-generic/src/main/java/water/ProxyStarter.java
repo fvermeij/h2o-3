@@ -1,11 +1,11 @@
 package water;
 
+import ai.h2o.webserver.iface.Credentials;
+import ai.h2o.webserver.iface.H2OProxy;
+import ai.h2o.webserver.iface.H2OServletContainerLoader;
+import ai.h2o.webserver.iface.WebServerConfig;
 import water.init.HostnameGuesser;
 import water.init.NetworkInit;
-import water.server.Credentials;
-import water.server.H2OProxy;
-import water.server.H2OServletContainerLoader;
-import water.server.WebServerConfig;
 
 import java.io.IOException;
 import java.net.InetAddress;

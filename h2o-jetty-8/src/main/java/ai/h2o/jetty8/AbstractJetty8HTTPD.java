@@ -1,5 +1,6 @@
 package ai.h2o.jetty8;
 
+import ai.h2o.webserver.iface.WebServerConfig;
 import org.eclipse.jetty.plus.jaas.JAASLoginService;
 import org.eclipse.jetty.security.Authenticator;
 import org.eclipse.jetty.security.ConstraintMapping;
@@ -24,7 +25,6 @@ import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import water.H2O;
-import water.server.WebServerConfig;
 import water.util.Log;
 
 import javax.servlet.http.HttpServletRequest;

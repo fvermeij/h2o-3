@@ -1,14 +1,14 @@
 package ai.h2o.jetty8.proxy;
 
 import ai.h2o.jetty8.AbstractJetty8HTTPD;
+import ai.h2o.webserver.iface.Credentials;
+import ai.h2o.webserver.iface.H2OProxy;
+import ai.h2o.webserver.iface.WebServerConfig;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
-import water.server.Credentials;
-import water.server.H2OProxy;
-import water.server.WebServerConfig;
 
 public class Jetty8Proxy extends AbstractJetty8HTTPD implements H2OProxy {
 

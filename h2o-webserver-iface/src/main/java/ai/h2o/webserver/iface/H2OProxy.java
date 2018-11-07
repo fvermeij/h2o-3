@@ -1,4 +1,4 @@
-package water.server;
+package ai.h2o.webserver.iface;
 
 public interface H2OProxy {
 

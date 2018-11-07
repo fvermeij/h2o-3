@@ -1,4 +1,4 @@
-package water.server;
+package ai.h2o.webserver.iface;
 
 import java.util.Iterator;
 import java.util.ServiceLoader;

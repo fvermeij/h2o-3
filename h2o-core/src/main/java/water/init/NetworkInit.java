@@ -1,10 +1,10 @@
 package water.init;
 
+import ai.h2o.webserver.iface.H2OServletContainerLoader;
+import ai.h2o.webserver.iface.WebServerConfig;
 import water.H2O;
 import water.H2ONode;
-import water.server.H2OServletContainerLoader;
 import water.server.ServletUtils;
-import water.server.WebServerConfig;
 import water.util.Log;
 import water.util.NetworkUtils;
 import water.util.StringUtils;
