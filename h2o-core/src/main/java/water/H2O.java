@@ -415,9 +415,6 @@ final public class H2O {
       return hdfs_skip;
     }
 
-    public static int getSysPropInt(String suffix, int defaultValue) {
-      return Integer.getInteger(SYSTEM_PROP_PREFIX + suffix, defaultValue);
-    }
   }
 
   public static void parseFailed(String message) {

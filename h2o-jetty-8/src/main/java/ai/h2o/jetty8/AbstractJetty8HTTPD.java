@@ -236,12 +236,17 @@ public abstract class AbstractJetty8HTTPD {
   // Configure connector via properties which we can modify.
   // Also increase request header size and buffer size from default values
   // located in org.eclipse.jetty.http.HttpBuffersImpl
+  // see PUBDEV-5939 for details
   private Connector configureConnector(String proto, Connector connector) {
-    connector.setRequestHeaderSize(H2O.OptArgs.getSysPropInt(proto+".requestHeaderSize", 32*1024));
-    connector.setRequestBufferSize(H2O.OptArgs.getSysPropInt(proto+".requestBufferSize", 32*1024));
-    connector.setResponseHeaderSize(H2O.OptArgs.getSysPropInt(proto+".responseHeaderSize", connector.getResponseHeaderSize()));
-    connector.setResponseBufferSize(H2O.OptArgs.getSysPropInt(proto+".responseBufferSize", connector.getResponseBufferSize()));
+    connector.setRequestHeaderSize(getSysPropInt(proto+".requestHeaderSize", 32*1024));
+    connector.setRequestBufferSize(getSysPropInt(proto+".requestBufferSize", 32*1024));
+    connector.setResponseHeaderSize(getSysPropInt(proto+".responseHeaderSize", connector.getResponseHeaderSize()));
+    connector.setResponseBufferSize(getSysPropInt(proto+".responseBufferSize", connector.getResponseBufferSize()));
     return connector;
+  }
+
+  private static int getSysPropInt(String suffix, int defaultValue) {
+    return Integer.getInteger(WebServerConfig.SYSTEM_PROP_PREFIX + suffix, defaultValue);
   }
 
   /**
