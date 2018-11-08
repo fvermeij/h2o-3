@@ -2104,10 +2104,7 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         assert _parms._intercept || (beta[beta.length-1] == 0);
         GLMGradientTask gt;
         if(_parms._family == Family.binomial && _parms._link == Link.logit) {
-          gt = new GLMBinomialGradientTask(_job == null ? null : _job._key, _dinfo, _parms, _l2pen, beta);
-          if (_parms._solver.equals(Solver.COORDINATE_DESCENT))
-            gt.set_calculateHess(true); // enable the calculation of Hessian matrix
-          gt.doAll(_dinfo._adaptedFrame);
+          gt = new GLMBinomialGradientTask(_job == null ? null : _job._key, _dinfo, _parms, _l2pen, beta).doAll(_dinfo._adaptedFrame);
         } else if(_parms._family == Family.gaussian && _parms._link == Link.identity)
           gt = new GLMGaussianGradientTask(_job == null?null:_job._key,_dinfo,_parms,_l2pen, beta).doAll(_dinfo._adaptedFrame);
         else if(_parms._family == Family.poisson && _parms._link == Link.log)
@@ -2117,14 +2114,13 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         else
           gt = new GLMGenericGradientTask(_job == null?null:_job._key, _dinfo, _parms, _l2pen, beta).doAll(_dinfo._adaptedFrame);
         double [] gradient = gt._gradient;
-        double[] invHessDiag = gt instanceof GLMBinomialGradientTask?gt._invHessDiag:null;
         double  likelihood = gt._likelihood;
         if (!_parms._intercept) // no intercept, null the ginfo
           gradient[gradient.length - 1] = 0;
         double obj = likelihood * _parms._obj_reg + .5 * _l2pen * ArrayUtils.l2norm2(beta, true);
         if (_bc != null && _bc._betaGiven != null && _bc._rho != null)
           obj = ProximalGradientSolver.proximal_gradient(gradient, obj, beta, _bc._betaGiven, _bc._rho);
-        return new GLMGradientInfo(likelihood, obj, gradient, invHessDiag);
+        return new GLMGradientInfo(likelihood, obj, gradient);
       }
     }
 

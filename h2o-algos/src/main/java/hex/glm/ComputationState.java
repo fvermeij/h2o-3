@@ -645,14 +645,15 @@ public final class ComputationState {
     }
 
     public final double [] getCODGradients(double l2pen){
+      int lastGradInd = xy.length-1;
       if(grads == null){
         grads = new double[xy.length];
-        for(int i = 0; i < grads.length; ++i)
+        for(int i = 0; i < lastGradInd; ++i)
           grads[i] = xy[i] - l2pen * beta[i];
       }
       if(newCols != null) {
         for (int i : newCols)
-          grads[i] = xy[i] - l2pen * beta[i];
+          grads[i] = xy[i] - (i==lastGradInd?0:l2pen * beta[i]);
       }
       return grads;
     }
