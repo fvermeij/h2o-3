@@ -32,22 +32,19 @@ import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import water.ExtensionManager;
 import water.H2O;
-import water.api.DatasetServlet;
-import water.api.NpsBinServlet;
-import water.api.PostFileServlet;
-import water.api.PutKeyServlet;
-import water.api.RequestServer;
 import water.server.RequestAuthExtension;
 import water.server.ServletUtils;
 import water.util.Log;
 
 import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class AbstractJetty8HTTPD {
 
@@ -295,14 +292,9 @@ public class AbstractJetty8HTTPD {
   }
 
   public void registerHandlers(HandlerWrapper handlerWrapper, ServletContextHandler context) {
-    context.addServlet(NpsBinServlet.class,   "/3/NodePersistentStorage.bin/*");
-    context.addServlet(PostFileServlet.class, "/3/PostFile.bin");
-    context.addServlet(PostFileServlet.class, "/3/PostFile");
-    context.addServlet(DatasetServlet.class,  "/3/DownloadDataset");
-    context.addServlet(DatasetServlet.class,  "/3/DownloadDataset.bin");
-    context.addServlet(PutKeyServlet.class,   "/3/PutKey.bin");
-    context.addServlet(PutKeyServlet.class,   "/3/PutKey");
-    context.addServlet(RequestServer.class,   "/");
+    for (Map.Entry<String, Class<? extends HttpServlet>> entry : config.servlets.entrySet()) {
+      context.addServlet(entry.getValue(), entry.getKey());
+    }
 
     final List<Handler> extHandlers = new ArrayList<>();
     extHandlers.add(new AuthenticationHandler());

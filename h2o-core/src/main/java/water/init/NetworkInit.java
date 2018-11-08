@@ -4,6 +4,11 @@ import ai.h2o.webserver.iface.H2OServletContainerLoader;
 import ai.h2o.webserver.iface.WebServerConfig;
 import water.H2O;
 import water.H2ONode;
+import water.api.DatasetServlet;
+import water.api.NpsBinServlet;
+import water.api.PostFileServlet;
+import water.api.PutKeyServlet;
+import water.api.RequestServer;
 import water.server.ServletUtils;
 import water.util.Log;
 import water.util.NetworkUtils;
@@ -217,6 +222,15 @@ public class NetworkInit {
     params.h2oExtendedHeaders.put("X-h2o-cluster-good", Boolean.toString(H2O.CLOUD.healthy()));
     params.h2oExtendedHeaders.put("X-h2o-context-path", ServletUtils.sanatizeContextPath(H2O.ARGS.context_path));
 
+    params.servlets = new LinkedHashMap<>();
+    params.servlets.put("/3/NodePersistentStorage.bin/*", NpsBinServlet.class);
+    params.servlets.put("/3/PostFile.bin", PostFileServlet.class);
+    params.servlets.put("/3/PostFile", PostFileServlet.class);
+    params.servlets.put("/3/DownloadDataset", DatasetServlet.class);
+    params.servlets.put("/3/DownloadDataset.bin", DatasetServlet.class);
+    params.servlets.put("/3/PutKey.bin", PutKeyServlet.class);
+    params.servlets.put("/3/PutKey", PutKeyServlet.class);
+    params.servlets.put("/", RequestServer.class);
     return params;
   }
 
