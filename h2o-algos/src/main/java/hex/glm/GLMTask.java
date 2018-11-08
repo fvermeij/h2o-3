@@ -15,7 +15,6 @@ import water.fvec.C0DChunk;
 import water.fvec.Chunk;
 import water.util.ArrayUtils;
 import water.util.FrameUtils;
-import water.util.Log;
 import water.util.MathUtils;
 import water.util.MathUtils.BasicStats;
 
@@ -1606,7 +1605,6 @@ public abstract class GLMTask  {
       if(_dinfo._intercept)
         _xy[_xy.length-1] += wz;
 
-      Log.info("inside original glm w is : "+w);
       _gram.addRow(r,w);
     }
 
@@ -1662,7 +1660,7 @@ public abstract class GLMTask  {
     double [][]_beta_multinomial;
     double []_beta;
     protected Gram  _gram; // wx%*%x
-    double [] _xy; // wx^t%*%z,
+    double [] _xy; // dobj/db,
     double _yy;
 
     final double [] _ymu;
@@ -1670,9 +1668,6 @@ public abstract class GLMTask  {
     long _nobs;
     public double _likelihood;
     private transient GLMWeights _w;
-    //    final double _lambda;
-    double wsum, wsumu;
-    double _sumsqe;
     int _c = -1;
 
     public  GLMIterationTaskCOD(Key jobKey, DataInfo dinfo, GLMWeightsFun glmw,double [] beta) {
@@ -1708,7 +1703,6 @@ public abstract class GLMTask  {
       if(r.isBad() || r.weight == 0) return;
       ++_nobs;
       double y = r.response(0);
-      _yy += y*y;
       final int numStart = _dinfo.numStart();
       double wz,w;
       if(_glmf._family == Family.multinomial) {
@@ -1721,26 +1715,19 @@ public abstract class GLMTask  {
         w  = r.weight * d;
       } else if(_beta != null) {
         _glmf.computeWeightsCOD(y, r.innerProduct(_beta) + _sparseOffset, r.offset, r.weight, _w);
-        w = _w.w;
-        wz = w*_w.z;
         _likelihood += _w.l;
-      } else {
-        w = r.weight;
-        wz = w*(y - r.offset);
       }
-      wsum+=w;
-      wsumu+=r.weight; // just add the user observation weight for the scaling.
+
       for(int i = 0; i < r.nBins; ++i)
-        _xy[r.binIds[i]] += wz;
+        _xy[r.binIds[i]] += _w.prMinresp;
       for(int i = 0; i < r.nNums; ++i){
         int id = r.numIds == null?(i + numStart):r.numIds[i];
         double val = r.numVals[i];
-        _xy[id] += wz*val;
+        _xy[id] += _w.prMinresp*val;
       }
       if(_dinfo._intercept)
-        _xy[_xy.length-1] += wz;
-      Log.info("inside COD speedup glm w is : "+w);
-      _gram.addRow(r,_w.w);
+        _xy[_xy.length-1] += _w.prMinresp;
+      _gram.addRow(r,_w.prOneMinpr);
     }
 
     @Override
@@ -1750,12 +1737,7 @@ public abstract class GLMTask  {
     public void reduce(GLMIterationTaskCOD git){
       ArrayUtils.add(_xy, git._xy);
       _gram.add(git._gram);
-      _nobs += git._nobs;
-      wsum += git.wsum;
-      wsumu += git.wsumu;
       _likelihood += git._likelihood;
-      _sumsqe += git._sumsqe;
-      _yy += git._yy;
       super.reduce(git);
     }
 
@@ -1788,127 +1770,6 @@ public abstract class GLMTask  {
     public boolean hasNaNsOrInf() {
       return ArrayUtils.hasNaNsOrInfs(_xy) || _gram.hasNaNsOrInfs();
     }
-  }
-
-  public static class GLMIterationCODTaskV1 extends FrameTask2<GLMIterationCODTaskV1> {
-    final GLMWeightsFun _glmf;
-    double []_beta;
-    protected Gram  _gram; // wx%*%x, the hessian
-    double [] _grad; // wx^t%*%z, should be storing grad
-
-    final double [] _ymu;
-
-    long _nobs;
-    public double _likelihood;
-    private transient GLMWeights _w;
-    //    final double _lambda;
-    double wsum, wsumu;
-    int _c = -1;
-
-    public GLMIterationCODTaskV1(Key jobKey, DataInfo dinfo, GLMWeightsFun glmw, double [] beta) {
-      super(null,dinfo,jobKey);
-      _beta = beta;
-      _ymu = null;
-      _glmf = glmw;
-    }
-
-    public GLMIterationCODTaskV1(Key jobKey, DataInfo dinfo, GLMWeightsFun glmw, double [] beta, int c) {
-      super(null,dinfo,jobKey);
-      _beta = beta;
-      _ymu = null;
-      _glmf = glmw;
-      _c = c;
-    }
-
-    @Override public boolean handlesSparseData(){return true;}
-
-    transient private double _sparseOffset;
-    @Override
-    public void chunkInit() {
-      // initialize
-      _gram = new Gram(_dinfo.fullN(), _dinfo.largestCat(), _dinfo.numNums(), _dinfo._cats,true);
-      _grad = MemoryManager.malloc8d(_dinfo.fullN()+1); // + 1 is for intercept
-      if(_sparse)
-        _sparseOffset = GLM.sparseOffset(_beta,_dinfo);
-      _w = new GLMWeights();
-    }
-
-    @Override
-    protected void processRow(Row r) { // called for every row in the chunk
-      if(r.isBad() || r.weight == 0) return;
-      ++_nobs;
-      double y = r.response(0);
-
-      final int numStart = _dinfo.numStart();
-      double wz,w;
-      if(_glmf._family == Family.multinomial) {
-        y = (y == _c)?1:0;
-        double mu = r.response(1);
-        double eta = r.response(2);
-        double d = mu*(1-mu);
-        if(d == 0) d = 1e-10;
-        wz = r.weight * (eta * d + (y-mu));
-        w  = r.weight * d;
-      } else if(_beta != null) {
-        _glmf.computeWeightsCODV1(y, r.innerProduct(_beta) + _sparseOffset, r.offset, r.weight, _w);
-        w = _w.w;
-        _likelihood += _w.l;
-      } else {
-        w = r.weight;
-      }
-      wsum+=w;
-      wsumu+=r.weight; // just add the user observation weight for the scaling.
-      for(int i = 0; i < r.nBins; ++i)
-        _grad[r.binIds[i]] += _w.prMinresp;
-      for(int i = 0; i < r.nNums; ++i){
-        int id = r.numIds == null?(i + numStart):r.numIds[i];
-        double val = r.numVals[i];
-        _grad[id] += _w.prMinresp*val;
-      }
-      if(_dinfo._intercept) // store value for intercept term without xvalues
-        _grad[_grad.length-1] += _w.prMinresp;
-      _gram.addRow(r,_w.prOneMinpr);
-    }
-
-    @Override
-    public void chunkDone(){adjustForSparseStandardizedZeros();}
-
-    @Override
-    public void reduce(GLMIterationCODTaskV1 git){
-      ArrayUtils.add(_grad, git._grad);
-      _gram.add(git._gram);
-      _nobs += git._nobs;
-      _likelihood += git._likelihood;
-      super.reduce(git);
-    }
-
-    private void adjustForSparseStandardizedZeros(){
-      if(_sparse && _dinfo._normSub != null) { // need to adjust gram for missing centering!
-        int ns = _dinfo.numStart();
-        int interceptIdx = _grad.length - 1;
-        double[] interceptRow = _gram._xx[interceptIdx - _gram._diagN];
-        double nobs = interceptRow[interceptRow.length - 1]; // weighted _nobs
-        for (int i = ns; i < _dinfo.fullN(); ++i) {
-          double iMean = _dinfo._normSub[i - ns] * _dinfo._normMul[i - ns];
-          for (int j = 0; j < ns; ++j)
-            _gram._xx[i - _gram._diagN][j] -= interceptRow[j] * iMean;
-          for (int j = ns; j <= i; ++j) {
-            double jMean = _dinfo._normSub[j - ns] * _dinfo._normMul[j - ns];
-            _gram._xx[i - _gram._diagN][j] -= interceptRow[i] * jMean + interceptRow[j] * iMean - nobs * iMean * jMean;
-          }
-        }
-        if (_dinfo._intercept) { // do the intercept row
-          for (int j = ns; j < _dinfo.fullN(); ++j)
-            interceptRow[j] -= nobs * _dinfo._normSub[j - ns] * _dinfo._normMul[j - ns];
-        }
-        // and the xy vec as well
-        for (int i = ns; i < _dinfo.fullN(); ++i) {
-          _grad[i] -= _grad[_grad.length - 1] * _dinfo._normSub[i - ns] * _dinfo._normMul[i - ns];
-        }
-      }
-    }
-
-
   }
 
  /* public static class GLMCoordinateDescentTask extends FrameTask2<GLMCoordinateDescentTask> {

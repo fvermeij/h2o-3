@@ -522,7 +522,7 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
     public double z = 0;
     public double l = 0;
     public double dev = Double.NaN;
-    public double prMinresp = 0.0;  // store pr(estimated yi=1)-yi
+    public double respMinPr = 0.0;  // store pr(estimated yi=1)-yi
     public double prOneMinpr = 0.0;  // store pr(estimated yi=1)*(1- pr(estimated yi=1))
   }
   public static class GLMWeightsFun extends Iced {
@@ -739,7 +739,7 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
       x.w = w / (var * d * d); // x.mu*(1-x.mu)
       x.z = eta + (y - x.mu) * d;
       likelihoodAndDeviance(y,x,w);
-      x.prMinresp = w*(x.mu-y);
+      x.respMinPr = w*(y-x.mu);
       x.prOneMinpr = x.mu*(1-x.mu)*w;
       return x;
     }
@@ -747,11 +747,10 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
     public GLMWeights computeWeightsCOD(double y, double eta, double off, double w, GLMWeights x) {
       double etaOff = eta + off;
       x.mu = linkInv(etaOff); // prob estimated response = 1
-      double var = variance(x.mu);//Math.max(1e-5, variance(x.mu)); // avoid numerical problems with 0 variance
       double d = linkDeriv(x.mu);
       double temp = x.mu*(1-x.mu);
-      x.w = w * (temp < 1e-6?1e-6:temp); // x.mu*(1-x.mu)
-     // x.w = w / (var * d * d);
+      x.respMinPr = w*(x.mu-y);
+      x.prOneMinpr = w * (temp < 1e-6?1e-6:temp);
       x.z = eta + (y - x.mu) * d;
       likelihoodAndDeviance(y,x,w);
       return x;
