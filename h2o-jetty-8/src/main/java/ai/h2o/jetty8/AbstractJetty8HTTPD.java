@@ -32,7 +32,6 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import water.ExtensionManager;
-import water.H2O;
 import water.server.RequestAuthExtension;
 import water.server.ServletUtils;
 import water.util.Log;
@@ -337,15 +336,6 @@ public class AbstractJetty8HTTPD {
     loginHandler.setHandler(authHandlers);
     // login handler is the root handler
     handlerWrapper.setHandler(loginHandler);
-  }
-
-  public RuntimeException failEx(String message) {
-    return H2O.fail(message);
-  }
-
-  //TODO make this effective in proxy instead of failEx
-  public RuntimeException failEx__Proxy(String message) {
-    return new IllegalStateException(message);
   }
 
   public void sendUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
