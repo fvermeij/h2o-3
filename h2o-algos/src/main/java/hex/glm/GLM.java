@@ -794,7 +794,6 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
 
     private void fitCOD_binomial(Solver s) {
       double [] betaCnd = _state.beta(); // store newly calculated beta
-      double [] betaCndOld = _state.beta();
       LineSearchSolver ls = null;
       boolean firstIter = true;
       int iterCnt = 0;
@@ -802,12 +801,8 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         while (true) {
           iterCnt++;
           long t1 = System.currentTimeMillis();
-          GLMBinomialGradientTask gt = new GLMBinomialGradientTask(_job._key, _dinfo, _parms, _state.l2pen(),betaCnd);
-        //  gt.set_calculateHess(true);
-        //  gt.doAll(_dinfo._adaptedFrame); // will give me grad, invHessDiag, likelihood
-         // ComputationState.GramCODV1 gramCodV1 = _state.computeGramCODV1(betaCnd, _state.l2pen());
-          ComputationState.GramCOD gramCod = _state.computeGramCOD(betaCnd, s);
-          ComputationState.GramXY gram = _state.computeGram(betaCnd,s); // change the beta coefficients here and calculate the likelihood with the new coefficients.
+          ComputationState.GramCOD gram = _state.computeGramCOD(betaCnd, s);
+          //ComputationState.GramXY gram = _state.computeGram(betaCnd,s); // change the beta coefficients here and calculate the likelihood with the new coefficients.
           long t2 = System.currentTimeMillis();
           if (!_state._lsNeeded && (Double.isNaN(gram.likelihood) || _state.objective(gram.beta, gram.likelihood) > _state.objective() + _parms._objective_epsilon)) {
             _state._lsNeeded = true;
@@ -817,11 +812,7 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
               return;
             }
             betaCnd = COD_solve(gram,_state._alpha,_state.lambda());
-            betaCndOld = COD_solve(gramCod, _state._alpha, _state.lambda());
 
-
-           // betaCndOld = COD_solve2(gramCod.gram.getXX(),gramCod.grads,gram.newCols,_state._alpha,_state.lambda());
-           // COD_solve(gram.gram.getXX(),gram.xy,gram.getCODGradients(),gram.newCols,alpha,lambda)
           }
           firstIter = false;
           long t3 = System.currentTimeMillis();
@@ -850,48 +841,48 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
     private void fitIRLSM(Solver s) {
       if (s.equals(Solver.COORDINATE_DESCENT))
         fitCOD_binomial(s);  // divert to fitCOD_binomial;
-
-      GLMWeightsFun glmw = new GLMWeightsFun(_parms);
-      double [] betaCnd = _state.beta();
-      LineSearchSolver ls = null;
-      boolean firstIter = true;
-      int iterCnt = 0;
-      try {
-        while (true) {
-          iterCnt++;
-          long t1 = System.currentTimeMillis();
-          ComputationState.GramXY gram = _state.computeGram(betaCnd,s);
-          long t2 = System.currentTimeMillis();
-          if (!_state._lsNeeded && (Double.isNaN(gram.likelihood) || _state.objective(gram.beta, gram.likelihood) > _state.objective() + _parms._objective_epsilon)) {
-            _state._lsNeeded = true;
-          } else {
-            if (!firstIter && !_state._lsNeeded && !progress(gram.beta, gram.likelihood)) {
-              System.out.println("DONE after " + (iterCnt-1) + " iterations (1)");
-              return;
+      else {
+        double[] betaCnd = _state.beta();
+        LineSearchSolver ls = null;
+        boolean firstIter = true;
+        int iterCnt = 0;
+        try {
+          while (true) {
+            iterCnt++;
+            long t1 = System.currentTimeMillis();
+            ComputationState.GramXY gram = _state.computeGram(betaCnd, s);
+            long t2 = System.currentTimeMillis();
+            if (!_state._lsNeeded && (Double.isNaN(gram.likelihood) || _state.objective(gram.beta, gram.likelihood) > _state.objective() + _parms._objective_epsilon)) {
+              _state._lsNeeded = true;
+            } else {
+              if (!firstIter && !_state._lsNeeded && !progress(gram.beta, gram.likelihood)) {
+                System.out.println("DONE after " + (iterCnt - 1) + " iterations (1)");
+                return;
+              }
+              betaCnd = ADMM_solve(gram.gram, gram.xy);
             }
-            betaCnd = s == Solver.COORDINATE_DESCENT?COD_solve(gram,_state._alpha,_state.lambda()):ADMM_solve(gram.gram,gram.xy);
+            firstIter = false;
+            long t3 = System.currentTimeMillis();
+            if (_state._lsNeeded) {
+              if (ls == null)
+                ls = (_state.l1pen() == 0 && !_state.activeBC().hasBounds())
+                        ? new MoreThuente(_state.gslvr(), _state.beta(), _state.ginfo())
+                        : new SimpleBacktrackingLS(_state.gslvr(), _state.beta().clone(), _state.l1pen(), _state.ginfo());
+              if (!ls.evaluate(ArrayUtils.subtract(betaCnd, ls.getX(), betaCnd))) {
+                Log.info(LogMsg("Ls failed " + ls));
+                return;
+              }
+              betaCnd = ls.getX();
+              if (!progress(betaCnd, ls.ginfo()))
+                return;
+              long t4 = System.currentTimeMillis();
+              Log.info(LogMsg("computed in " + (t2 - t1) + "+" + (t3 - t2) + "+" + (t4 - t3) + "=" + (t4 - t1) + "ms, step = " + ls.step() + ((_lslvr != null) ? ", l1solver " + _lslvr : "")));
+            } else
+              Log.info(LogMsg("computed in " + (t2 - t1) + "+" + (t3 - t2) + "=" + (t3 - t1) + "ms, step = " + 1 + ((_lslvr != null) ? ", l1solver " + _lslvr : "")));
           }
-          firstIter = false;
-          long t3 = System.currentTimeMillis();
-          if(_state._lsNeeded) {
-            if(ls == null)
-              ls = (_state.l1pen() == 0 && !_state.activeBC().hasBounds())
-                 ? new MoreThuente(_state.gslvr(),_state.beta(), _state.ginfo())
-                 : new SimpleBacktrackingLS(_state.gslvr(),_state.beta().clone(), _state.l1pen(), _state.ginfo());
-            if (!ls.evaluate(ArrayUtils.subtract(betaCnd, ls.getX(), betaCnd))) {
-              Log.info(LogMsg("Ls failed " + ls));
-              return;
-            }
-            betaCnd = ls.getX();
-            if(!progress(betaCnd,ls.ginfo()))
-              return;
-            long t4 = System.currentTimeMillis();
-            Log.info(LogMsg("computed in " + (t2 - t1) + "+" + (t3 - t2) + "+" + (t4 - t3) + "=" + (t4 - t1) + "ms, step = " + ls.step() + ((_lslvr != null) ? ", l1solver " + _lslvr : "")));
-          } else
-            Log.info(LogMsg("computed in " + (t2 - t1) + "+" + (t3 - t2) + "=" + (t3 - t1) + "ms, step = " + 1 + ((_lslvr != null) ? ", l1solver " + _lslvr : "")));
+        } catch (NonSPDMatrixException e) {
+          Log.warn(LogMsg("Got Non SPD matrix, stopped."));
         }
-      } catch(NonSPDMatrixException e) {
-        Log.warn(LogMsg("Got Non SPD matrix, stopped."));
       }
     }
 
@@ -1549,103 +1540,9 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
   }
 
   public double[] COD_solve(ComputationState.GramCOD gram,  double alpha, double lambda) {
-    double[][] xx = gram.gram.getXX();
-    double wsumInv = 1.0/(xx[xx.length-1][xx.length-1]);
-    final double betaEpsilon = _parms._beta_epsilon*_parms._beta_epsilon;
-    double updateEpsilon = 0.01*betaEpsilon;
-    double l1pen = lambda * alpha;
-    double l2pen = lambda*(1-alpha);
-    int[] newCols = gram.newCols;
-    double[] grads = gram.getCODGradients(l2pen);
-
-    double [] diagInv = MemoryManager.malloc8d(xx.length);
-    for(int i = 0; i < diagInv.length; ++i)
-      diagInv[i] = -1.0/(xx[i][i] + l2pen); // store inverse and -negative hessian
-    DataInfo activeData = _state.activeData();
-    int [][] nzs = new int[activeData.numStart()][];
-    if(nzs.length > 1000) {
-      final int [] nzs_ary = new int[xx.length];
-      for (int i = 0; i < activeData._cats; ++i) {
-        int var_min = activeData._catOffsets[i];
-        int var_max = activeData._catOffsets[i + 1];
-        for(int l = var_min; l < var_max; ++l) {
-          int k = 0;
-          double [] x = xx[l];
-          for (int j = 0; j < var_min; ++j)
-            if (x[j] != 0) nzs_ary[k++] = j;
-          for (int j = var_max; j < activeData.numStart(); ++j)
-            if (x[j] != 0) nzs_ary[k++] = j;
-          if (k < ((nzs_ary.length - var_max + var_min) >> 3)) {
-            nzs[l] = Arrays.copyOf(nzs_ary, k);
-          }
-        }
-      }
-    }
-    final BetaConstraint bc = _state.activeBC();
-    double [] beta = _state.beta().clone();
-    int numStart = activeData.numStart();
-    if(newCols != null) {
-      for (int id : newCols) {
-        double b = beta[id]+bc.applyBounds(ADMM.shrinkage(grads[id], l1pen) * diagInv[id], id); // update coefficients
-        if (b != 0) {
-          doUpdateCD(grads, xx[id], -b, id, id + 1);
-          beta[id] = b;
-        }
-      }
-    }
-    int iter1 = 0;
-    int P = gram.xy.length - 1;
-    double maxDiff = 0;
-//    // CD loop
-    while (iter1++ < Math.max(P,500)) {
-      maxDiff = 0;
-      for (int i = 0; i < activeData._cats; ++i) {
-        for(int j = activeData._catOffsets[i]; j < activeData._catOffsets[i+1]; ++j) { // can do in parallel
-          double bd = bc.applyBounds(ADMM.shrinkage(grads[j], l1pen) * diagInv[j],j); // new beta value here with l1pen is applicable
-          double b = beta[j] + bd;
-          if(bd != 0) {
-            double diff = bd*bd*xx[j][j];
-            if(diff > maxDiff) maxDiff = diff;
-            if (nzs[j] == null)
-              doUpdateCD(grads, xx[j], bd, activeData._catOffsets[i], activeData._catOffsets[i + 1]);
-            else {
-              double[] x = xx[j];
-              int[] ids = nzs[j];
-              for (int id : ids) grads[id] += bd * x[id];
-              doUpdateCD(grads, x, bd, 0, activeData.numStart());
-            }
-            beta[j] = b;
-
-            Log.info("iteration: "+iter1+" coord: "+j+" bd: "+bd+" b: "+beta[j]);
-          }
-        }
-      }
-      for (int i = numStart; i < P; ++i) {
-        double bd = bc.applyBounds(ADMM.shrinkage(grads[i], l1pen) * diagInv[i],i);
-        double b = beta[i] + bd;
-        double diff = bd * bd * xx[i][i];
-        if (diff > maxDiff) maxDiff = diff;
-        if(diff > updateEpsilon) {
-          doUpdateCD(grads, xx[i], bd, i, i + 1);
-          beta[i] = b;
-          Log.info("iteration: "+iter1+" coord: "+i+" bd: "+bd+" b: "+beta[i]);
-        }
-      }
-      // intercept
-      if(_parms._intercept) {
-        double bd = bc.applyBounds(grads[P] * wsumInv,P);
-        double b = beta[P] + bd;
-        double diff = bd * bd * xx[P][P];
-        if (diff > maxDiff) maxDiff = diff;
-        doUpdateCD(grads, xx[P], bd, P, P + 1);
-        beta[P] = b;
-        Log.info("iteration: "+iter1+" coord: "+P+" bd: "+bd+" b: "+beta[P]);
-      }
-      Log.info("maxDiff "+maxDiff+" betaEpsilon: "+betaEpsilon);
-      if (maxDiff < betaEpsilon) // stop if beta not changing much
-        break;
-    }
-    return beta;
+    double [] res = COD_solve(gram.gram.getXX(),gram.xy,gram.getCODGradients(lambda*(1-alpha)),gram.newCols,alpha,lambda);
+    gram.newCols = new int[0];
+    return res;
   }
 
   private double [] COD_solve(double [][] xx, double [] xy, double [] grads, int [] newCols, double alpha, double lambda) {
