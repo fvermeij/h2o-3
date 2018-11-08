@@ -19,7 +19,7 @@ public class ProxyLoginHandler extends HandlerWrapper {
   private final String _errorTarget;
   private final byte[] _loginFormData;
 
-  ProxyLoginHandler(String loginTarget, String errorTarget) {
+  public ProxyLoginHandler(String loginTarget, String errorTarget) {
     _loginTarget = loginTarget;
     _errorTarget = errorTarget;
     try {

@@ -1,5 +1,8 @@
 package ai.h2o.jetty8;
 
+import ai.h2o.jetty8.proxy.ProxyLoginHandler;
+import ai.h2o.jetty8.proxy.TransparentProxyServlet;
+import ai.h2o.webserver.iface.Credentials;
 import ai.h2o.webserver.iface.WebServerConfig;
 import org.eclipse.jetty.plus.jaas.JAASLoginService;
 import org.eclipse.jetty.security.Authenticator;
@@ -12,28 +15,43 @@ import org.eclipse.jetty.security.LoginService;
 import org.eclipse.jetty.security.authentication.BasicAuthenticator;
 import org.eclipse.jetty.security.authentication.FormAuthenticator;
 import org.eclipse.jetty.server.Connector;
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.bio.SocketConnector;
 import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.server.session.HashSessionIdManager;
 import org.eclipse.jetty.server.session.HashSessionManager;
 import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.server.ssl.SslSocketConnector;
 import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
+import water.ExtensionManager;
+import water.H2O;
+import water.api.DatasetServlet;
+import water.api.NpsBinServlet;
+import water.api.PostFileServlet;
+import water.api.PutKeyServlet;
+import water.api.RequestServer;
+import water.server.RequestAuthExtension;
+import water.server.ServletUtils;
 import water.util.Log;
 
+import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
-public abstract class AbstractJetty8HTTPD {
+public class AbstractJetty8HTTPD {
 
-  protected final WebServerConfig _args;
+  protected final WebServerConfig config;
 
   private String _ip;
   private int _port;
@@ -41,15 +59,15 @@ public abstract class AbstractJetty8HTTPD {
   // Jetty server object.
   private Server _server;
 
-  protected AbstractJetty8HTTPD(WebServerConfig args) {
-    _args = args;
+  protected AbstractJetty8HTTPD(WebServerConfig config) {
+    this.config = config;
   }
 
   /**
    * @return URI scheme
    */
   public String getScheme() {
-    if (_args.jks != null) {
+    if (config.jks != null) {
       return "https";
     }
     else {
@@ -84,7 +102,7 @@ public abstract class AbstractJetty8HTTPD {
    */
   public void start(String ip, int port) throws Exception {
     setup(ip, port);
-    if (_args.jks != null) {
+    if (config.jks != null) {
       startHttps();
     }
     else {
@@ -95,30 +113,30 @@ public abstract class AbstractJetty8HTTPD {
   private void createServer(Connector connector) throws Exception {
     _server.setConnectors(new Connector[]{connector});
 
-    if (_args.hash_login || _args.ldap_login || _args.kerberos_login || _args.pam_login) {
+    if (config.hash_login || config.ldap_login || config.kerberos_login || config.pam_login) {
       // REFER TO http://www.eclipse.org/jetty/documentation/9.1.4.v20140401/embedded-examples.html#embedded-secured-hello-handler
-      if (_args.login_conf == null) {
+      if (config.login_conf == null) {
         throw new IllegalArgumentException("Must specify -login_conf argument");
       }
 
       LoginService loginService;
-      if (_args.hash_login) {
+      if (config.hash_login) {
         Log.info("Configuring HashLoginService");
-        loginService = new HashLoginService("H2O", _args.login_conf);
+        loginService = new HashLoginService("H2O", config.login_conf);
       }
-      else if (_args.ldap_login) {
+      else if (config.ldap_login) {
         Log.info("Configuring JAASLoginService (with LDAP)");
-        System.setProperty("java.security.auth.login.config", _args.login_conf);
+        System.setProperty("java.security.auth.login.config", config.login_conf);
         loginService = new JAASLoginService("ldaploginmodule");
       }
-      else if (_args.kerberos_login) {
+      else if (config.kerberos_login) {
         Log.info("Configuring JAASLoginService (with Kerberos)");
-        System.setProperty("java.security.auth.login.config",_args.login_conf);
+        System.setProperty("java.security.auth.login.config", config.login_conf);
         loginService = new JAASLoginService("krb5loginmodule");
       }
-      else if (_args.pam_login) {
+      else if (config.pam_login) {
         Log.info("Configuring JAASLoginService (with PAM)");
-        System.setProperty("java.security.auth.login.config",_args.login_conf);
+        System.setProperty("java.security.auth.login.config", config.login_conf);
         loginService = new JAASLoginService("pamloginmodule");
       }
       else {
@@ -160,7 +178,7 @@ public abstract class AbstractJetty8HTTPD {
 
       // Authentication / Authorization
       Authenticator authenticator;
-      if (_args.form_auth) {
+      if (config.form_auth) {
         BasicAuthenticator basicAuthenticator = new BasicAuthenticator();
         FormAuthenticator formAuthenticator = new FormAuthenticator("/login", "/loginError", false);
         authenticator = new Jetty8DelegatingAuthenticator(basicAuthenticator, formAuthenticator);
@@ -174,8 +192,8 @@ public abstract class AbstractJetty8HTTPD {
       _server.setSessionIdManager(idManager);
 
       HashSessionManager manager = new HashSessionManager();
-      if (_args.session_timeout > 0)
-        manager.setMaxInactiveInterval(_args.session_timeout * 60);
+      if (config.session_timeout > 0)
+        manager.setMaxInactiveInterval(config.session_timeout * 60);
 
       SessionHandler sessionHandler = new SessionHandler(manager);
       sessionHandler.setHandler(security);
@@ -189,8 +207,6 @@ public abstract class AbstractJetty8HTTPD {
 
     _server.start();
   }
-
-  protected abstract RuntimeException failEx(String message);
 
   private Server makeServer() {
     Server s = new Server();
@@ -217,8 +233,8 @@ public abstract class AbstractJetty8HTTPD {
   private void startHttps() throws Exception {
     _server = makeServer();
 
-    SslContextFactory sslContextFactory = new SslContextFactory(_args.jks);
-    sslContextFactory.setKeyStorePassword(_args.jks_pass);
+    SslContextFactory sslContextFactory = new SslContextFactory(config.jks);
+    sslContextFactory.setKeyStorePassword(config.jks_pass);
 
     SslSocketConnector httpsConnector = new SslSocketConnector(sslContextFactory);
 
@@ -269,8 +285,8 @@ public abstract class AbstractJetty8HTTPD {
             ServletContextHandler.NO_SECURITY | ServletContextHandler.NO_SESSIONS
     );
 
-    if(null != _args.context_path && ! _args.context_path.isEmpty()) {
-      context.setContextPath(_args.context_path);
+    if(null != config.context_path && ! config.context_path.isEmpty()) {
+      context.setContextPath(config.context_path);
     } else {
       context.setContextPath("/");
     }
@@ -278,9 +294,84 @@ public abstract class AbstractJetty8HTTPD {
     registerHandlers(handlerWrapper, context);
   }
 
-  protected abstract void registerHandlers(HandlerWrapper handlerWrapper, ServletContextHandler context);
+  public void registerHandlers(HandlerWrapper handlerWrapper, ServletContextHandler context) {
+    context.addServlet(NpsBinServlet.class,   "/3/NodePersistentStorage.bin/*");
+    context.addServlet(PostFileServlet.class, "/3/PostFile.bin");
+    context.addServlet(PostFileServlet.class, "/3/PostFile");
+    context.addServlet(DatasetServlet.class,  "/3/DownloadDataset");
+    context.addServlet(DatasetServlet.class,  "/3/DownloadDataset.bin");
+    context.addServlet(PutKeyServlet.class,   "/3/PutKey.bin");
+    context.addServlet(PutKeyServlet.class,   "/3/PutKey");
+    context.addServlet(RequestServer.class,   "/");
 
-  protected void sendUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
+    final List<Handler> extHandlers = new ArrayList<>();
+    extHandlers.add(new AuthenticationHandler());
+    // here we wrap generic authentication handlers into jetty-aware wrappers
+    for (final RequestAuthExtension requestAuthExtension : ExtensionManager.getInstance().getAuthExtensions()) {
+      extHandlers.add(new AbstractHandler() {
+        @Override
+        public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
+          if (requestAuthExtension.handle(target, request, response)) {
+            baseRequest.setHandled(true);
+          }
+        }
+      });
+    }
+    //
+    extHandlers.add(context);
+
+    // Handlers that can only be invoked for an authenticated user (if auth is enabled)
+    HandlerCollection authHandlers = new HandlerCollection();
+    authHandlers.setHandlers(extHandlers.toArray(new Handler[0]));
+
+    // LoginHandler handles directly login requests and delegates the rest to the authHandlers
+    LoginHandler loginHandler = new LoginHandler("/login", "/loginError");
+    loginHandler.setHandler(authHandlers);
+
+    HandlerCollection hc = new HandlerCollection();
+    hc.setHandlers(new Handler[]{
+        new GateHandler(),
+        loginHandler
+    });
+    handlerWrapper.setHandler(hc);
+  }
+
+  //TODO make this effective in proxy instead of registerHandlers
+  public void registerHandlers__Proxy(HandlerWrapper handlerWrapper, ServletContextHandler context, Credentials credentials, String proxyTo) {
+    // setup authenticating proxy servlet (each request is forwarded with BASIC AUTH)
+    final ServletHolder proxyServlet = new ServletHolder(TransparentProxyServlet.class);
+    proxyServlet.setInitParameter("ProxyTo", proxyTo);
+    proxyServlet.setInitParameter("Prefix", "/");
+    proxyServlet.setInitParameter("BasicAuth", credentials.toBasicAuth());
+    context.addServlet(proxyServlet, "/*");
+    // authHandlers assume the user is already authenticated
+    final HandlerCollection authHandlers = new HandlerCollection();
+    authHandlers.setHandlers(new Handler[]{
+        new AuthenticationHandler(),
+        context,
+    });
+    // handles requests of login form and delegates the rest to the authHandlers
+    final ProxyLoginHandler loginHandler = new ProxyLoginHandler("/login", "/loginError");
+    loginHandler.setHandler(authHandlers);
+    // login handler is the root handler
+    handlerWrapper.setHandler(loginHandler);
+  }
+
+  public RuntimeException failEx(String message) {
+    return H2O.fail(message);
+  }
+
+  //TODO make this effective in proxy instead of failEx
+  public RuntimeException failEx__Proxy(String message) {
+    return new IllegalStateException(message);
+  }
+
+  public void sendUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
+    ServletUtils.sendResponseError(response, HttpServletResponse.SC_UNAUTHORIZED, message);
+  }
+
+  //TODO make this effective in proxy instead of sendUnauthorizedResponse
+  public void sendUnauthorizedResponse__Proxy(HttpServletResponse response, String message) throws IOException {
     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, message);
   }
 
@@ -289,11 +380,11 @@ public abstract class AbstractJetty8HTTPD {
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response)
             throws IOException {
 
-      if (!_args.ldap_login && !_args.kerberos_login && !_args.pam_login) return;
+      if (!config.ldap_login && !config.kerberos_login && !config.pam_login) return;
 
       String loginName = request.getUserPrincipal().getName();
-      if (!loginName.equals(_args.user_name)) {
-        Log.warn("Login name (" + loginName + ") does not match cluster owner name (" + _args.user_name + ")");
+      if (!loginName.equals(config.user_name)) {
+        Log.warn("Login name (" + loginName + ") does not match cluster owner name (" + config.user_name + ")");
         sendUnauthorizedResponse(response, "Login name does not match cluster owner name");
         baseRequest.setHandled(true);
       }
