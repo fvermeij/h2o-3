@@ -3,6 +3,7 @@ package ai.h2o.jetty8;
 import ai.h2o.jetty8.proxy.ProxyLoginHandler;
 import ai.h2o.jetty8.proxy.TransparentProxyServlet;
 import ai.h2o.webserver.iface.Credentials;
+import ai.h2o.webserver.iface.LoginType;
 import ai.h2o.webserver.iface.WebServerConfig;
 import org.eclipse.jetty.plus.jaas.JAASLoginService;
 import org.eclipse.jetty.security.Authenticator;
@@ -110,34 +111,23 @@ public class AbstractJetty8HTTPD {
   private void createServer(Connector connector) throws Exception {
     _server.setConnectors(new Connector[]{connector});
 
-    if (config.hash_login || config.ldap_login || config.kerberos_login || config.pam_login) {
+    if (config.loginType != LoginType.NONE) {
       // REFER TO http://www.eclipse.org/jetty/documentation/9.1.4.v20140401/embedded-examples.html#embedded-secured-hello-handler
-      if (config.login_conf == null) {
-        throw new IllegalArgumentException("Must specify -login_conf argument");
-      }
-
-      LoginService loginService;
-      if (config.hash_login) {
-        Log.info("Configuring HashLoginService");
-        loginService = new HashLoginService("H2O", config.login_conf);
-      }
-      else if (config.ldap_login) {
-        Log.info("Configuring JAASLoginService (with LDAP)");
-        System.setProperty("java.security.auth.login.config", config.login_conf);
-        loginService = new JAASLoginService("ldaploginmodule");
-      }
-      else if (config.kerberos_login) {
-        Log.info("Configuring JAASLoginService (with Kerberos)");
-        System.setProperty("java.security.auth.login.config", config.login_conf);
-        loginService = new JAASLoginService("krb5loginmodule");
-      }
-      else if (config.pam_login) {
-        Log.info("Configuring JAASLoginService (with PAM)");
-        System.setProperty("java.security.auth.login.config", config.login_conf);
-        loginService = new JAASLoginService("pamloginmodule");
-      }
-      else {
-        throw failEx("Unexpected authentication method selected");
+      final LoginService loginService;
+      switch (config.loginType) {
+        case HASH:
+          Log.info("Configuring HashLoginService");
+          loginService = new HashLoginService("H2O", config.login_conf);
+          break;
+        case LDAP:
+        case KERBEROS:
+        case PAM:
+          Log.info(String.format("Configuring JAASLoginService (with %s)", config.loginType));
+          System.setProperty("java.security.auth.login.config", config.login_conf);
+          loginService = new JAASLoginService(config.loginType.jaasRealm);
+          break;
+        default:
+          throw new UnsupportedOperationException(config.loginType + ""); // this can never happen
       }
       IdentityService identityService = new DefaultIdentityService();
       loginService.setIdentityService(identityService);
@@ -372,7 +362,7 @@ public class AbstractJetty8HTTPD {
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response)
             throws IOException {
 
-      if (!config.ldap_login && !config.kerberos_login && !config.pam_login) return;
+      if (!config.loginType.isJaas()) return; //TODO question: for LoginType.HASH, does this equal not adding this handler at all? if so, I would prefer doing it that way
 
       String loginName = request.getUserPrincipal().getName();
       if (!loginName.equals(config.user_name)) {

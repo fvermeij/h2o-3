@@ -1,6 +1,7 @@
 package water.init;
 
 import ai.h2o.webserver.iface.H2OServletContainerLoader;
+import ai.h2o.webserver.iface.LoginType;
 import ai.h2o.webserver.iface.WebServerConfig;
 import water.H2O;
 import water.H2ONode;
@@ -200,10 +201,7 @@ public class NetworkInit {
     final WebServerConfig params = new WebServerConfig();
     params.jks = args.jks;
     params.jks_pass = args.jks_pass;
-    params.hash_login = args.hash_login;
-    params.ldap_login = args.ldap_login;
-    params.kerberos_login = args.kerberos_login;
-    params.pam_login = args.pam_login;
+    params.loginType = parseLoginType(args);
     params.login_conf = args.login_conf;
     params.form_auth = args.form_auth;
     params.session_timeout = args.session_timeout;
@@ -232,6 +230,25 @@ public class NetworkInit {
     params.servlets.put("/3/PutKey", PutKeyServlet.class);
     params.servlets.put("/", RequestServer.class);
     return params;
+  }
+
+  private static LoginType parseLoginType(H2O.BaseArgs args) {
+    final LoginType loginType;
+    if (args.hash_login) {
+      loginType = LoginType.HASH;
+    } else if (args.ldap_login) {
+      loginType = LoginType.LDAP;
+    } else if (args.kerberos_login) {
+      loginType = LoginType.KERBEROS;
+    } else if (args.pam_login) {
+      loginType = LoginType.PAM;
+    } else {
+      return LoginType.NONE;
+    }
+    if (args.login_conf == null) {
+      throw new IllegalArgumentException("Must specify -login_conf argument");
+    }
+    return loginType;
   }
 
   /**

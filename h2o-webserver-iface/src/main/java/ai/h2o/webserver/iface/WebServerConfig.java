@@ -15,13 +15,7 @@ public class WebServerConfig {
 
   public String jks_pass;
 
-  public boolean hash_login;
-
-  public boolean ldap_login;
-
-  public boolean kerberos_login;
-
-  public boolean pam_login;
+  public LoginType loginType;
 
   public String login_conf;
 
@@ -48,4 +42,6 @@ public class WebServerConfig {
   public int baseport;
 
   public String web_ip;
+
+
 }
