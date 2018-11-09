@@ -7,6 +7,8 @@ import java.io.IOException;
 public interface H2OHttpServer {
   void acceptRequests();
 
+  boolean authenticationHandler(HttpServletRequest request, HttpServletResponse response) throws IOException;
+
   void gateHandler(HttpServletRequest request, HttpServletResponse response);
 
   boolean loginHandler(String target, HttpServletRequest request, HttpServletResponse response) throws IOException;
