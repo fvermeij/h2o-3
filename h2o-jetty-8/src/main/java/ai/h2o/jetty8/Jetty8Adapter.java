@@ -3,6 +3,7 @@ package ai.h2o.jetty8;
 import ai.h2o.jetty8.proxy.ProxyLoginHandler;
 import ai.h2o.jetty8.proxy.TransparentProxyServlet;
 import ai.h2o.webserver.iface.Credentials;
+import ai.h2o.webserver.iface.H2OHttpServer;
 import ai.h2o.webserver.iface.LoginType;
 import ai.h2o.webserver.iface.RequestAuthExtension;
 import ai.h2o.webserver.iface.WebServerConfig;
@@ -46,9 +47,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class AbstractJetty8HTTPD {
+public class Jetty8Adapter {
 
-  protected final WebServerConfig config;
+  private final WebServerConfig config;
+  private final H2OHttpServer h2o;
 
   private String _ip;
   private int _port;
@@ -56,8 +58,9 @@ public class AbstractJetty8HTTPD {
   // Jetty server object.
   private Server _server;
 
-  protected AbstractJetty8HTTPD(WebServerConfig config) {
-    this.config = config;
+  protected Jetty8Adapter(H2OHttpServer h2o) {
+    this.h2o = h2o;
+    this.config = h2o.getConfig();
   }
 
   /**
@@ -347,7 +350,7 @@ public class AbstractJetty8HTTPD {
     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, message);
   }
 
-  public class AuthenticationHandler extends AbstractHandler {
+  class AuthenticationHandler extends AbstractHandler {
     @Override
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response)
             throws IOException {
@@ -363,12 +366,12 @@ public class AbstractJetty8HTTPD {
     }
   }
 
-  static class LoginHandler extends HandlerWrapper {
+  class LoginHandler extends HandlerWrapper {
 
     @Override
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response)
         throws IOException, ServletException {
-      final boolean handled = Jetty8HTTPD.loginHandler(target, request, response);
+      final boolean handled = h2o.loginHandler(target, request, response);
       if (handled) {
         baseRequest.setHandled(true);
       } else {
@@ -378,10 +381,10 @@ public class AbstractJetty8HTTPD {
 
   }
 
-  static class GateHandler extends AbstractHandler {
+  class GateHandler extends AbstractHandler {
     @Override
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) {
-      Jetty8HTTPD.gateHandler(request, response);
+      h2o.gateHandler(request, response);
     }
 
   }

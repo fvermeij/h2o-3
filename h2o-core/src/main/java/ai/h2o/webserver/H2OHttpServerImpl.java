@@ -1,6 +1,6 @@
-package ai.h2o.jetty8;
+package ai.h2o.webserver;
 
-import ai.h2o.webserver.iface.H2OServletContainer;
+import ai.h2o.webserver.iface.H2OHttpServer;
 import ai.h2o.webserver.iface.WebServerConfig;
 import water.api.RequestServer;
 import water.server.ServletUtils;
@@ -17,24 +17,27 @@ import java.io.OutputStream;
  * Embedded Jetty instance inside H2O.
  * This is intended to be a singleton per H2O node.
  */
-public class Jetty8HTTPD extends AbstractJetty8HTTPD implements H2OServletContainer {
+public class H2OHttpServerImpl implements H2OHttpServer {
   //------------------------------------------------------------------------------------------
   // Object-specific things.
   //------------------------------------------------------------------------------------------
   private static volatile boolean _acceptRequests = false;
+  private final WebServerConfig config;
 
   /**
    * Create bare Jetty object.
    */
-  public Jetty8HTTPD(WebServerConfig webServerConfig) {
-    super(webServerConfig);
+  public H2OHttpServerImpl(WebServerConfig config) {
+    this.config = config;
   }
 
+  @Override
   public void acceptRequests() {
     _acceptRequests = true;
   }
 
-  static void gateHandler(HttpServletRequest request, HttpServletResponse response) {
+  @Override
+  public void gateHandler(HttpServletRequest request, HttpServletResponse response) {
     ServletUtils.startRequestLifecycle();
     while (!_acceptRequests) {
       try { Thread.sleep(100); }
@@ -48,7 +51,8 @@ public class Jetty8HTTPD extends AbstractJetty8HTTPD implements H2OServletContai
     ServletUtils.setCommonResponseHttpHeaders(response, isXhrRequest);
   }
 
-  static boolean loginHandler(String target, HttpServletRequest request, HttpServletResponse response) throws IOException {
+  @Override
+  public boolean loginHandler(String target, HttpServletRequest request, HttpServletResponse response) throws IOException {
     if (! isLoginTarget(target)) {
       return false;
     }
@@ -59,6 +63,11 @@ public class Jetty8HTTPD extends AbstractJetty8HTTPD implements H2OServletContai
       ServletUtils.sendResponseError(response, HttpServletResponse.SC_UNAUTHORIZED, "Access denied. Please login.");
     }
     return true;
+  }
+
+  @Override
+  public WebServerConfig getConfig() {
+    return config;
   }
 
   private static void sendLoginForm(HttpServletRequest request, HttpServletResponse response) {
