@@ -801,8 +801,8 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         while (true) {
           iterCnt++;
           long t1 = System.currentTimeMillis();
-          ComputationState.GramCOD gram = _state.computeGramCOD(betaCnd, s);
-          //ComputationState.GramXY gram = _state.computeGram(betaCnd,s); // change the beta coefficients here and calculate the likelihood with the new coefficients.
+          //ComputationState.GramCOD gram = _state.computeGramCOD(betaCnd, s);
+          ComputationState.GramXY gram = _state.computeGram(betaCnd,s); // change the beta coefficients here and calculate the likelihood with the new coefficients.
           long t2 = System.currentTimeMillis();
           if (!_state._lsNeeded && (Double.isNaN(gram.likelihood) || _state.objective(gram.beta, gram.likelihood) > _state.objective() + _parms._objective_epsilon)) {
             _state._lsNeeded = true;
@@ -1540,9 +1540,102 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
   }
 
   public double[] COD_solve(ComputationState.GramCOD gram,  double alpha, double lambda) {
-    double [] res = COD_solve(gram.gram.getXX(),gram.xy,gram.getCODGradients(lambda*(1-alpha)),gram.newCols,alpha,lambda);
-    gram.newCols = new int[0];
-    return res;
+    int[] newCols = gram.newCols;
+    double[][] xx = gram.gram.getXX();
+    double wsumInv = 1.0/(xx[xx.length-1][xx.length-1]);
+    final double betaEpsilon = _parms._beta_epsilon*_parms._beta_epsilon;
+    double updateEpsilon = 0.01*betaEpsilon;
+    double l1pen = lambda * alpha;
+    double l2pen = lambda*(1-alpha);
+    double[] grads = gram.getCODGradients(l2pen);
+    double [] diagInv = MemoryManager.malloc8d(xx.length);
+    for(int i = 0; i < diagInv.length; ++i)
+      diagInv[i] = 1.0/(xx[i][i] + l2pen); // store the hessian for each coefficient
+    DataInfo activeData = _state.activeData();
+    int [][] nzs = new int[activeData.numStart()][];
+    if(nzs.length > 1000) {
+      final int [] nzs_ary = new int[xx.length];
+      for (int i = 0; i < activeData._cats; ++i) {
+        int var_min = activeData._catOffsets[i];
+        int var_max = activeData._catOffsets[i + 1];
+        for(int l = var_min; l < var_max; ++l) {
+          int k = 0;
+          double [] x = xx[l];
+          for (int j = 0; j < var_min; ++j)
+            if (x[j] != 0) nzs_ary[k++] = j;
+          for (int j = var_max; j < activeData.numStart(); ++j)
+            if (x[j] != 0) nzs_ary[k++] = j;
+          if (k < ((nzs_ary.length - var_max + var_min) >> 3)) {
+            nzs[l] = Arrays.copyOf(nzs_ary, k);
+          }
+        }
+      }
+    }
+    final BetaConstraint bc = _state.activeBC();
+    double [] beta = _state.beta().clone();
+    int numStart = activeData.numStart();
+    if(newCols != null) {
+      for (int id : newCols) {
+        double b = bc.applyBounds(ADMM.shrinkage(grads[id], l1pen) * diagInv[id], id);
+        if (b != 0) {
+          doUpdateCD(grads, xx[id], b, id, id + 1);
+          beta[id] = b;
+        }
+      }
+    }
+    int iter1 = 0;
+    int P = gram.xy.length - 1;
+    double maxDiff = 0;
+//    // CD loop
+    while (iter1++ < Math.max(P,500)) {
+      maxDiff = 0;
+      for (int i = 0; i < activeData._cats; ++i) {
+        for(int j = activeData._catOffsets[i]; j < activeData._catOffsets[i+1]; ++j) { // can do in parallel
+          double bd = bc.applyBounds(ADMM.shrinkage(grads[j], l1pen) * diagInv[j],j); // new beta value here with l1pen is applicable
+          double b = beta[j]-bd;
+          if(bd != 0) {
+            double diff = bd*bd*xx[j][j];
+            if(diff > maxDiff) maxDiff = diff;
+            if (nzs[j] == null)
+              doUpdateCD(grads, xx[j], bd, activeData._catOffsets[i], activeData._catOffsets[i + 1]);
+            else {
+              double[] x = xx[j];
+              int[] ids = nzs[j];
+              for (int id : ids) grads[id] += bd * x[id];
+              doUpdateCD(grads, x, bd, 0, activeData.numStart());
+            }
+            beta[j] = b;
+            Log.info("Iterations: "+iter1+" coord: "+j+" bd is "+bd+" beta is "+b);
+          }
+        }
+      }
+      for (int i = numStart; i < P; ++i) {
+        double bd = bc.applyBounds(ADMM.shrinkage(grads[i], l1pen) * diagInv[i],i);
+        double b = beta[i] - bd;
+        double diff = bd * bd * xx[i][i];
+        if (diff > maxDiff) maxDiff = diff;
+        if(diff > updateEpsilon) {
+          doUpdateCD(grads, xx[i], bd, i, i + 1);
+          beta[i] = b;
+          Log.info("Iterations: "+iter1+" coord: "+i+" bd is "+bd+" beta is "+b);
+        }
+      }
+      // intercept
+      if(_parms._intercept) {
+        double bd = bc.applyBounds(grads[P] * wsumInv,P);
+        double b = beta[P] - bd;
+        double diff = bd * bd * xx[P][P];
+        if (diff > maxDiff) maxDiff = diff;
+        doUpdateCD(grads, xx[P], bd, P, P + 1);
+        beta[P] = b;
+        Log.info("Iterations: "+iter1+" coord: "+P+" bd is "+bd+" beta is "+b);
+      }
+      if (maxDiff < betaEpsilon) // stop if beta not changing much
+        break;
+    }
+    long tend = System.currentTimeMillis();
+    return beta;
+
   }
 
   private double [] COD_solve(double [][] xx, double [] xy, double [] grads, int [] newCols, double alpha, double lambda) {

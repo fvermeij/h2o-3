@@ -1676,14 +1676,14 @@ public abstract class GLMTask  {
       }
 
       for(int i = 0; i < r.nBins; ++i)
-        _xy[r.binIds[i]] += _w.respMinPr;
+        _xy[r.binIds[i]] += _w.respMinusPr;
       for(int i = 0; i < r.nNums; ++i){
         int id = r.numIds == null?(i + numStart):r.numIds[i];
         double val = r.numVals[i];
-        _xy[id] += _w.respMinPr*val;
+        _xy[id] += _w.respMinusPr*val;
       }
       if(_dinfo._intercept)
-        _xy[_xy.length-1] += _w.respMinPr;
+        _xy[_xy.length-1] += _w.respMinusPr;
       _gram.addRow(r,_w.prOneMinpr);
     }
 
