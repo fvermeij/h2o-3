@@ -1,5 +1,6 @@
 package water.init;
 
+import ai.h2o.webserver.H2OHttpServerImpl;
 import ai.h2o.webserver.iface.H2OServletContainerLoader;
 import ai.h2o.webserver.iface.LoginType;
 import ai.h2o.webserver.iface.WebServerConfig;
@@ -76,7 +77,9 @@ public class NetworkInit {
 
     // Late instantiation of Jetty object, if needed.
     if (H2O.getServletContainer() == null && !H2O.ARGS.disable_web) {
-      H2O.setServletContainer(H2OServletContainerLoader.INSTANCE.createServletContainer(webServerParams(H2O.ARGS)));
+      final WebServerConfig config = webServerParams(H2O.ARGS);
+      final H2OHttpServerImpl h2oHttpServer = new H2OHttpServerImpl(config);
+      H2O.setServletContainer(H2OServletContainerLoader.INSTANCE.createServletContainer(h2oHttpServer));
     }
 
     // API socket is only used to find opened port on given ip.

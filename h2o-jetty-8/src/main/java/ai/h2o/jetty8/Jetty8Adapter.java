@@ -4,6 +4,7 @@ import ai.h2o.jetty8.proxy.ProxyLoginHandler;
 import ai.h2o.jetty8.proxy.TransparentProxyServlet;
 import ai.h2o.webserver.iface.Credentials;
 import ai.h2o.webserver.iface.H2OHttpServer;
+import ai.h2o.webserver.iface.H2OServletContainer;
 import ai.h2o.webserver.iface.LoginType;
 import ai.h2o.webserver.iface.RequestAuthExtension;
 import ai.h2o.webserver.iface.WebServerConfig;
@@ -46,20 +47,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class Jetty8Adapter {
+public class Jetty8Adapter implements H2OServletContainer {
 
   private final WebServerConfig config;
-  private final H2OHttpServer h2o;
+  private final H2OHttpServer h2oHttpServer;
 
   private String _ip;
   private int _port;
 
-  // Jetty server object.
-  private Server _server;
+  private Server jettyServer;
 
-  protected Jetty8Adapter(H2OHttpServer h2o) {
-    this.h2o = h2o;
-    this.config = h2o.getConfig();
+  protected Jetty8Adapter(H2OHttpServer h2oHttpServer) {
+    this.h2oHttpServer = h2oHttpServer;
+    this.config = h2oHttpServer.getConfig();
   }
 
   /**
@@ -110,7 +110,7 @@ public class Jetty8Adapter {
   }
 
   private void createServer(Connector connector) throws Exception {
-    _server.setConnectors(new Connector[]{connector});
+    jettyServer.setConnectors(new Connector[]{connector});
 
     if (config.loginType != LoginType.NONE) {
       // REFER TO http://www.eclipse.org/jetty/documentation/9.1.4.v20140401/embedded-examples.html#embedded-secured-hello-handler
@@ -132,7 +132,7 @@ public class Jetty8Adapter {
       }
       IdentityService identityService = new DefaultIdentityService();
       loginService.setIdentityService(identityService);
-      _server.addBean(loginService);
+      jettyServer.addBean(loginService);
 
       // Set a security handler as the first handler in the chain.
       ConstraintSecurityHandler security = new ConstraintSecurityHandler();
@@ -177,7 +177,7 @@ public class Jetty8Adapter {
       security.setAuthenticator(authenticator);
 
       HashSessionIdManager idManager = new HashSessionIdManager();
-      _server.setSessionIdManager(idManager);
+      jettyServer.setSessionIdManager(idManager);
 
       HashSessionManager manager = new HashSessionManager();
       if (config.session_timeout > 0)
@@ -188,12 +188,12 @@ public class Jetty8Adapter {
 
       // Pass-through to H2O if authenticated.
       registerHandlers(security);
-      _server.setHandler(sessionHandler);
+      jettyServer.setHandler(sessionHandler);
     } else {
-      registerHandlers(_server);
+      registerHandlers(jettyServer);
     }
 
-    _server.start();
+    jettyServer.start();
   }
 
   private Server makeServer() {
@@ -203,7 +203,7 @@ public class Jetty8Adapter {
   }
 
   private void startHttp() throws Exception {
-    _server = makeServer();
+    jettyServer = makeServer();
 
     Connector connector=new SocketConnector();
     connector.setHost(_ip);
@@ -219,7 +219,7 @@ public class Jetty8Adapter {
    * @throws Exception -
    */
   private void startHttps() throws Exception {
-    _server = makeServer();
+    jettyServer = makeServer();
 
     SslContextFactory sslContextFactory = new SslContextFactory(config.jks);
     sslContextFactory.setKeyStorePassword(config.jks_pass);
@@ -258,9 +258,14 @@ public class Jetty8Adapter {
    * @throws Exception -
    */
   public void stop() throws Exception {
-    if (_server != null) {
-      _server.stop();
+    if (jettyServer != null) {
+      jettyServer.stop();
     }
+  }
+
+  @Override
+  public void acceptRequests() {
+    h2oHttpServer.acceptRequests(); //TODO eliminate this; it should be called on h2o side internally
   }
 
   /**
@@ -344,7 +349,7 @@ public class Jetty8Adapter {
     @Override
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response)
         throws IOException {
-      boolean handled = h2o.authenticationHandler(request, response);
+      boolean handled = h2oHttpServer.authenticationHandler(request, response);
       if (handled) {
         baseRequest.setHandled(true);
       }
@@ -355,7 +360,7 @@ public class Jetty8Adapter {
     @Override
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response)
         throws IOException, ServletException {
-      final boolean handled = h2o.loginHandler(target, request, response);
+      final boolean handled = h2oHttpServer.loginHandler(target, request, response);
       if (handled) {
         baseRequest.setHandled(true);
       } else {
@@ -368,7 +373,7 @@ public class Jetty8Adapter {
   class GateHandler extends AbstractHandler {
     @Override
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) {
-      h2o.gateHandler(request, response);
+      h2oHttpServer.gateHandler(request, response);
     }
 
   }
