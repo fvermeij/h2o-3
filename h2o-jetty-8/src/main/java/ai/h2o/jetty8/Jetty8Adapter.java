@@ -34,7 +34,6 @@ import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
-import water.util.Log;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -57,7 +56,7 @@ public class Jetty8Adapter implements H2OServletContainer {
 
   private Server jettyServer;
 
-  protected Jetty8Adapter(H2OHttpServer h2oHttpServer) {
+  Jetty8Adapter(H2OHttpServer h2oHttpServer) {
     this.h2oHttpServer = h2oHttpServer;
     this.config = h2oHttpServer.getConfig();
   }
@@ -72,20 +71,6 @@ public class Jetty8Adapter implements H2OServletContainer {
     else {
       return "http";
     }
-  }
-
-  /**
-   * @return Port number
-   */
-  public int getPort() {
-    return _port;
-  }
-
-  /**
-   * @return IP address
-   */
-  public String getIp() {
-    return _ip;
   }
 
   private void setup(String ip, int port) {
@@ -117,14 +102,11 @@ public class Jetty8Adapter implements H2OServletContainer {
       final LoginService loginService;
       switch (config.loginType) {
         case HASH:
-          Log.info("Configuring HashLoginService");
           loginService = new HashLoginService("H2O", config.login_conf);
           break;
         case LDAP:
         case KERBEROS:
         case PAM:
-          Log.info(String.format("Configuring JAASLoginService (with %s)", config.loginType));
-          System.setProperty("java.security.auth.login.config", config.login_conf);
           loginService = new JAASLoginService(config.loginType.jaasRealm);
           break;
         default:
@@ -226,10 +208,10 @@ public class Jetty8Adapter implements H2OServletContainer {
 
     SslSocketConnector httpsConnector = new SslSocketConnector(sslContextFactory);
 
-    if (getIp() != null) {
-      httpsConnector.setHost(getIp());
+    if (_ip != null) {
+      httpsConnector.setHost(_ip);
     }
-    httpsConnector.setPort(getPort());
+    httpsConnector.setPort(_port);
 
     createServer(
         configureConnector("https", httpsConnector));

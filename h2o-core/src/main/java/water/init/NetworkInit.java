@@ -251,6 +251,14 @@ public class NetworkInit {
     if (args.login_conf == null) {
       throw new IllegalArgumentException("Must specify -login_conf argument");
     }
+    if (loginType.isJaas()) {
+      // LDAP, KERBEROS, PAM
+      Log.info(String.format("Configuring JAASLoginService (with %s)", loginType));
+      System.setProperty("java.security.auth.login.config", args.login_conf);
+    } else {
+      // HASH only
+      Log.info("Configuring HashLoginService");
+    }
     return loginType;
   }
 
