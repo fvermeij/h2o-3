@@ -1,7 +1,9 @@
 package ai.h2o.webserver;
 
 import ai.h2o.webserver.iface.H2OHttpServer;
+import ai.h2o.webserver.iface.RequestAuthExtension;
 import ai.h2o.webserver.iface.WebServerConfig;
+import water.ExtensionManager;
 import water.api.RequestServer;
 import water.server.ServletUtils;
 import water.util.Log;
@@ -13,6 +15,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Collection;
 
 /**
  * Embedded Jetty instance inside H2O.
@@ -95,6 +98,11 @@ public class H2OHttpServerImpl implements H2OHttpServer {
   @Override
   public WebServerConfig getConfig() {
     return config;
+  }
+
+  @Override
+  public Collection<RequestAuthExtension> getAuthExtensions() {
+    return ExtensionManager.getInstance().getAuthExtensions();
   }
 
   private static void sendLoginForm(HttpServletRequest request, HttpServletResponse response) {

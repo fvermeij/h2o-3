@@ -34,7 +34,6 @@ import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
-import water.ExtensionManager;
 import water.util.Log;
 
 import javax.servlet.ServletException;
@@ -43,6 +42,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -295,7 +295,8 @@ public class Jetty8Adapter implements H2OServletContainer {
     final List<Handler> extHandlers = new ArrayList<>();
     extHandlers.add(new AuthenticationHandler());
     // here we wrap generic authentication handlers into jetty-aware wrappers
-    for (final RequestAuthExtension requestAuthExtension : ExtensionManager.getInstance().getAuthExtensions()) {
+    final Collection<RequestAuthExtension> authExtensions = h2oHttpServer.getAuthExtensions();
+    for (final RequestAuthExtension requestAuthExtension : authExtensions) {
       extHandlers.add(new AbstractHandler() {
         @Override
         public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
