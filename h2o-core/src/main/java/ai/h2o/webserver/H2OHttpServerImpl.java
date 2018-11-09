@@ -18,19 +18,12 @@ import java.io.OutputStream;
 import java.util.Collection;
 
 /**
- * Embedded Jetty instance inside H2O.
  * This is intended to be a singleton per H2O node.
  */
 public class H2OHttpServerImpl implements H2OHttpServer {
-  //------------------------------------------------------------------------------------------
-  // Object-specific things.
-  //------------------------------------------------------------------------------------------
   private static volatile boolean _acceptRequests = false;
   private final WebServerConfig config;
 
-  /**
-   * Create bare Jetty object.
-   */
   public H2OHttpServerImpl(WebServerConfig config) {
     this.config = config;
   }
@@ -124,7 +117,7 @@ public class H2OHttpServerImpl implements H2OHttpServer {
       water.util.FileUtils.copyStream(new ByteArrayInputStream(bytes), os, 2048);
       // TODO: this whole method can be replaced with just:
       // org.apache.commons.io.IOUtils.copy( water.init.JarHash.getResource2("/login.html"), os);
-      // but it needs to be properly tested
+      // but it needs to be properly tested; this is probably due to Content-Length
     } catch (Exception e) {
       ServletUtils.sendErrorResponse(response, e, uri);
     } finally {
