@@ -4,6 +4,7 @@ import ai.h2o.jetty8.proxy.ProxyLoginHandler;
 import ai.h2o.jetty8.proxy.TransparentProxyServlet;
 import ai.h2o.webserver.iface.Credentials;
 import ai.h2o.webserver.iface.LoginType;
+import ai.h2o.webserver.iface.RequestAuthExtension;
 import ai.h2o.webserver.iface.WebServerConfig;
 import org.eclipse.jetty.plus.jaas.JAASLoginService;
 import org.eclipse.jetty.security.Authenticator;
@@ -32,7 +33,6 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import water.ExtensionManager;
-import water.server.RequestAuthExtension;
 import water.server.ServletUtils;
 import water.util.Log;
 
@@ -306,7 +306,7 @@ public class AbstractJetty8HTTPD {
     authHandlers.setHandlers(extHandlers.toArray(new Handler[0]));
 
     // LoginHandler handles directly login requests and delegates the rest to the authHandlers
-    LoginHandler loginHandler = new LoginHandler("/login", "/loginError");
+    final LoginHandler loginHandler = new LoginHandler();
     loginHandler.setHandler(authHandlers);
 
     HandlerCollection hc = new HandlerCollection();
@@ -363,4 +363,26 @@ public class AbstractJetty8HTTPD {
     }
   }
 
+  static class LoginHandler extends HandlerWrapper {
+
+    @Override
+    public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response)
+        throws IOException, ServletException {
+      final boolean handled = Jetty8HTTPD.loginHandler(target, request, response);
+      if (handled) {
+        baseRequest.setHandled(true);
+      } else {
+        super.handle(target, baseRequest, request, response);
+      }
+    }
+
+  }
+
+  static class GateHandler extends AbstractHandler {
+    @Override
+    public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) {
+      Jetty8HTTPD.gateHandler(request, response);
+    }
+
+  }
 }

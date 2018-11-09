@@ -1,14 +1,18 @@
 package water;
 
 
+import ai.h2o.webserver.iface.RequestAuthExtension;
 import water.api.RequestServer;
 import water.api.RestApiExtension;
 import water.api.SchemaServer;
-import water.server.RequestAuthExtension;
 import water.util.Log;
 import water.util.StringUtils;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.ServiceLoader;
 
 public class ExtensionManager {
 

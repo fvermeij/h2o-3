@@ -1,4 +1,5 @@
-package water.server;
+package ai.h2o.webserver.iface;
+//package water.server;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -6,7 +7,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 /**
- * Extension point for HTTP request handling. Managed by {@link water.ExtensionManager}.
+ * Extension point for HTTP request handling. Managed by ExtensionManager.
  */
 public interface RequestAuthExtension {
   /**
