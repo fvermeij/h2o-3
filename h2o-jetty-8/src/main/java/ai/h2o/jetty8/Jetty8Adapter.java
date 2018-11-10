@@ -118,88 +118,91 @@ public class Jetty8Adapter {
 
     final Connector connector = useHttps ? createHttpsConnector() : createHttpConnector();
     jettyServer.setConnectors(new Connector[]{connector});
-    createServer(jettyServer);
+
+    final HandlerWrapper handlerWrapper = authWrapper(jettyServer);
+    final ServletContextHandler context = createServletContextHandler();
+    registerHandlers(handlerWrapper, context);
     return jettyServer;
   }
 
-  private void createServer(Server jettyServer) {
-    if (config.loginType != LoginType.NONE) {
-      // REFER TO http://www.eclipse.org/jetty/documentation/9.1.4.v20140401/embedded-examples.html#embedded-secured-hello-handler
-      final LoginService loginService;
-      switch (config.loginType) {
-        case HASH:
-          loginService = new HashLoginService("H2O", config.login_conf);
-          break;
-        case LDAP:
-        case KERBEROS:
-        case PAM:
-          loginService = new JAASLoginService(config.loginType.jaasRealm);
-          break;
-        default:
-          throw new UnsupportedOperationException(config.loginType + ""); // this can never happen
-      }
-      IdentityService identityService = new DefaultIdentityService();
-      loginService.setIdentityService(identityService);
-      jettyServer.addBean(loginService);
-
-      // Set a security handler as the first handler in the chain.
-      ConstraintSecurityHandler security = new ConstraintSecurityHandler();
-
-      // Set up a constraint to authenticate all calls, and allow certain roles in.
-      Constraint constraint = new Constraint();
-      constraint.setName("auth");
-      constraint.setAuthenticate(true);
-
-      // Configure role stuff (to be disregarded).  We are ignoring roles, and only going off the user name.
-      //
-      //   Jetty 8 and prior.
-      //
-      //     Jetty 8 requires the security.setStrict(false) and ANY_ROLE.
-      security.setStrict(false);
-      constraint.setRoles(new String[]{Constraint.ANY_ROLE});
-
-      //   Jetty 9 and later.
-      //
-      //     Jetty 9 and later uses a different servlet spec, and ANY_AUTH gives the same behavior
-      //     for that API version as ANY_ROLE did previously.  This required some low-level debugging
-      //     to figure out, so I'm documenting it here.
-      //     Jetty 9 did not require security.setStrict(false).
-      //
-      // constraint.setRoles(new String[]{Constraint.ANY_AUTH});
-
-      ConstraintMapping mapping = new ConstraintMapping();
-      mapping.setPathSpec("/*"); // Lock down all API calls
-      mapping.setConstraint(constraint);
-      security.setConstraintMappings(Collections.singletonList(mapping));
-
-      // Authentication / Authorization
-      Authenticator authenticator;
-      if (config.form_auth) {
-        BasicAuthenticator basicAuthenticator = new BasicAuthenticator();
-        FormAuthenticator formAuthenticator = new FormAuthenticator("/login", "/loginError", false);
-        authenticator = new Jetty8DelegatingAuthenticator(basicAuthenticator, formAuthenticator);
-      } else {
-        authenticator = new BasicAuthenticator();
-      }
-      security.setLoginService(loginService);
-      security.setAuthenticator(authenticator);
-
-      HashSessionIdManager idManager = new HashSessionIdManager();
-      jettyServer.setSessionIdManager(idManager);
-
-      HashSessionManager manager = new HashSessionManager();
-      if (config.session_timeout > 0)
-        manager.setMaxInactiveInterval(config.session_timeout * 60);
-
-      SessionHandler sessionHandler = new SessionHandler(manager);
-      sessionHandler.setHandler(security);
-
-      // Pass-through to H2O if authenticated.
-      hookupHandlers(security);
-      jettyServer.setHandler(sessionHandler);
-    } else {
-      hookupHandlers(jettyServer);
+  private HandlerWrapper authWrapper(Server jettyServer) {
+    if (config.loginType == LoginType.NONE) {
+      return jettyServer;
     }
+
+    // REFER TO http://www.eclipse.org/jetty/documentation/9.1.4.v20140401/embedded-examples.html#embedded-secured-hello-handler
+    final LoginService loginService;
+    switch (config.loginType) {
+      case HASH:
+        loginService = new HashLoginService("H2O", config.login_conf);
+        break;
+      case LDAP:
+      case KERBEROS:
+      case PAM:
+        loginService = new JAASLoginService(config.loginType.jaasRealm);
+        break;
+      default:
+        throw new UnsupportedOperationException(config.loginType + ""); // this can never happen
+    }
+    IdentityService identityService = new DefaultIdentityService();
+    loginService.setIdentityService(identityService);
+    jettyServer.addBean(loginService);
+
+    // Set a security handler as the first handler in the chain.
+    ConstraintSecurityHandler security = new ConstraintSecurityHandler();
+
+    // Set up a constraint to authenticate all calls, and allow certain roles in.
+    Constraint constraint = new Constraint();
+    constraint.setName("auth");
+    constraint.setAuthenticate(true);
+
+    // Configure role stuff (to be disregarded).  We are ignoring roles, and only going off the user name.
+    //
+    //   Jetty 8 and prior.
+    //
+    //     Jetty 8 requires the security.setStrict(false) and ANY_ROLE.
+    security.setStrict(false);
+    constraint.setRoles(new String[]{Constraint.ANY_ROLE});
+
+    //   Jetty 9 and later.
+    //
+    //     Jetty 9 and later uses a different servlet spec, and ANY_AUTH gives the same behavior
+    //     for that API version as ANY_ROLE did previously.  This required some low-level debugging
+    //     to figure out, so I'm documenting it here.
+    //     Jetty 9 did not require security.setStrict(false).
+    //
+    // constraint.setRoles(new String[]{Constraint.ANY_AUTH});
+
+    ConstraintMapping mapping = new ConstraintMapping();
+    mapping.setPathSpec("/*"); // Lock down all API calls
+    mapping.setConstraint(constraint);
+    security.setConstraintMappings(Collections.singletonList(mapping));
+
+    // Authentication / Authorization
+    Authenticator authenticator;
+    if (config.form_auth) {
+      BasicAuthenticator basicAuthenticator = new BasicAuthenticator();
+      FormAuthenticator formAuthenticator = new FormAuthenticator("/login", "/loginError", false);
+      authenticator = new Jetty8DelegatingAuthenticator(basicAuthenticator, formAuthenticator);
+    } else {
+      authenticator = new BasicAuthenticator();
+    }
+    security.setLoginService(loginService);
+    security.setAuthenticator(authenticator);
+
+    HashSessionIdManager idManager = new HashSessionIdManager();
+    jettyServer.setSessionIdManager(idManager);
+
+    HashSessionManager manager = new HashSessionManager();
+    if (config.session_timeout > 0)
+      manager.setMaxInactiveInterval(config.session_timeout * 60);
+
+    SessionHandler sessionHandler = new SessionHandler(manager);
+    sessionHandler.setHandler(security);
+
+    // Pass-through to H2O if authenticated.
+    jettyServer.setHandler(sessionHandler);
+    return security;
 
   }
 
@@ -244,10 +247,10 @@ public class Jetty8Adapter {
   /**
    * Hook up Jetty handlers.  Do this before start() is called.
    */
-  private void hookupHandlers(HandlerWrapper handlerWrapper) {
+  private ServletContextHandler createServletContextHandler() {
     // Both security and session handlers are already created (Note: we don't want to create a new separate session
     // handler just for ServletContextHandler - we want to have just one SessionHandler & SessionManager)
-    ServletContextHandler context = new ServletContextHandler(
+    final ServletContextHandler context = new ServletContextHandler(
             ServletContextHandler.NO_SECURITY | ServletContextHandler.NO_SESSIONS
     );
 
@@ -256,8 +259,7 @@ public class Jetty8Adapter {
     } else {
       context.setContextPath("/");
     }
-
-    registerHandlers(handlerWrapper, context);
+    return context;
   }
 
   private void registerHandlers(HandlerWrapper handlerWrapper, ServletContextHandler context) {
