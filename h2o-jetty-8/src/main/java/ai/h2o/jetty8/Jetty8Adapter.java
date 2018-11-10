@@ -90,18 +90,19 @@ public class Jetty8Adapter implements H2OServletContainer {
    * @throws Exception -
    */
   public void start(String ip, int port) throws Exception {
+    final boolean useHttps = config.jks != null;
     setup(ip, port);
-    if (config.jks != null) {
-      startHttps();
-    }
-    else {
-      startHttp();
-    }
+    jettyServer = new Server();
+    jettyServer.setSendServerVersion(false);
+
+    final Connector connector = useHttps ? createHttpsConnector() : createHttpConnector();
+    jettyServer.setConnectors(new Connector[]{connector});
+    createServer();
+
+    jettyServer.start();
   }
 
-  private void createServer(Connector connector) throws Exception {
-    jettyServer.setConnectors(new Connector[]{connector});
-
+  private void createServer() {
     if (config.loginType != LoginType.NONE) {
       // REFER TO http://www.eclipse.org/jetty/documentation/9.1.4.v20140401/embedded-examples.html#embedded-secured-hello-handler
       final LoginService loginService;
@@ -174,40 +175,24 @@ public class Jetty8Adapter implements H2OServletContainer {
       sessionHandler.setHandler(security);
 
       // Pass-through to H2O if authenticated.
-      registerHandlers(security);
+      hookupHandlers(security);
       jettyServer.setHandler(sessionHandler);
     } else {
-      registerHandlers(jettyServer);
+      hookupHandlers(jettyServer);
     }
 
-    jettyServer.start();
   }
 
-  private Server makeServer() {
-    Server s = new Server();
-    s.setSendServerVersion(false);
-    return s;
-  }
-
-  private void startHttp() throws Exception {
-    jettyServer = makeServer();
+  private Connector createHttpConnector() {
 
     Connector connector=new SocketConnector();
     connector.setHost(_ip);
     connector.setPort(_port);
-
-    createServer(
-        configureConnector("http", connector));
+    configureConnector("http", connector);
+    return connector;
   }
 
-  /**
-   * This implementation is based on http://blog.denevell.org/jetty-9-ssl-https.html
-   *
-   * @throws Exception -
-   */
-  private void startHttps() throws Exception {
-    jettyServer = makeServer();
-
+  private Connector createHttpsConnector() {
     SslContextFactory sslContextFactory = new SslContextFactory(config.jks);
     sslContextFactory.setKeyStorePassword(config.jks_pass);
 
@@ -217,21 +202,19 @@ public class Jetty8Adapter implements H2OServletContainer {
       httpsConnector.setHost(_ip);
     }
     httpsConnector.setPort(_port);
-
-    createServer(
-        configureConnector("https", httpsConnector));
+    configureConnector("https", httpsConnector);
+    return httpsConnector;
   }
 
   // Configure connector via properties which we can modify.
   // Also increase request header size and buffer size from default values
   // located in org.eclipse.jetty.http.HttpBuffersImpl
   // see PUBDEV-5939 for details
-  private Connector configureConnector(String proto, Connector connector) {
+  private void configureConnector(String proto, Connector connector) {
     connector.setRequestHeaderSize(getSysPropInt(proto+".requestHeaderSize", 32*1024));
     connector.setRequestBufferSize(getSysPropInt(proto+".requestBufferSize", 32*1024));
     connector.setResponseHeaderSize(getSysPropInt(proto+".responseHeaderSize", connector.getResponseHeaderSize()));
     connector.setResponseBufferSize(getSysPropInt(proto+".responseBufferSize", connector.getResponseBufferSize()));
-    return connector;
   }
 
   private static int getSysPropInt(String suffix, int defaultValue) {
@@ -253,7 +236,7 @@ public class Jetty8Adapter implements H2OServletContainer {
   /**
    * Hook up Jetty handlers.  Do this before start() is called.
    */
-  private void registerHandlers(HandlerWrapper handlerWrapper) {
+  private void hookupHandlers(HandlerWrapper handlerWrapper) {
     // Both security and session handlers are already created (Note: we don't want to create a new separate session
     // handler just for ServletContextHandler - we want to have just one SessionHandler & SessionManager)
     ServletContextHandler context = new ServletContextHandler(
@@ -269,7 +252,7 @@ public class Jetty8Adapter implements H2OServletContainer {
     registerHandlers(handlerWrapper, context);
   }
 
-  public void registerHandlers(HandlerWrapper handlerWrapper, ServletContextHandler context) {
+  private void registerHandlers(HandlerWrapper handlerWrapper, ServletContextHandler context) {
     for (Map.Entry<String, Class<? extends HttpServlet>> entry : config.servlets.entrySet()) {
       context.addServlet(entry.getValue(), entry.getKey());
     }
