@@ -47,7 +47,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class Jetty8Adapter {
+class Jetty8Adapter {
 
   private final WebServerConfig config;
   private final H2OHttpServer h2oHttpServer;
@@ -68,6 +68,9 @@ public class Jetty8Adapter {
       @Override
       public void start(String ip, int port) throws Exception {
         jettyServer = adapter.createJettyServer(ip, port);
+        final HandlerWrapper handlerWrapper = adapter.authWrapper(jettyServer);
+        final ServletContextHandler context = adapter.createServletContextHandler();
+        adapter.registerHandlers(handlerWrapper, context);
         jettyServer.start();
       }
 
@@ -86,7 +89,7 @@ public class Jetty8Adapter {
     };
   }
 
-  static H2OProxy createProxyAdapter(final H2OHttpServer h2oHttpServer, Credentials credentials, String proxyTo) {
+  static H2OProxy createProxyAdapter(final H2OHttpServer h2oHttpServer, final Credentials credentials, final String proxyTo) {
     return new H2OProxy() {
       private final Jetty8Adapter adapter = new Jetty8Adapter(h2oHttpServer);
 
@@ -98,6 +101,9 @@ public class Jetty8Adapter {
       @Override
       public void start(String ip, int port) throws Exception {
         final Server jettyServer = adapter.createJettyServer(ip, port);
+        final HandlerWrapper handlerWrapper = adapter.authWrapper(jettyServer);
+        final ServletContextHandler context = adapter.createServletContextHandler();
+        adapter.registerHandlers__Proxy(handlerWrapper, context, credentials, proxyTo);
         jettyServer.start();
       }
     };
@@ -119,9 +125,6 @@ public class Jetty8Adapter {
     final Connector connector = useHttps ? createHttpsConnector() : createHttpConnector();
     jettyServer.setConnectors(new Connector[]{connector});
 
-    final HandlerWrapper handlerWrapper = authWrapper(jettyServer);
-    final ServletContextHandler context = createServletContextHandler();
-    registerHandlers(handlerWrapper, context);
     return jettyServer;
   }
 
@@ -300,8 +303,7 @@ public class Jetty8Adapter {
     handlerWrapper.setHandler(hc);
   }
 
-  //TODO make this effective in proxy instead of registerHandlers
-  public void registerHandlers__Proxy(HandlerWrapper handlerWrapper, ServletContextHandler context, Credentials credentials, String proxyTo) {
+  private void registerHandlers__Proxy(HandlerWrapper handlerWrapper, ServletContextHandler context, Credentials credentials, String proxyTo) {
     // setup authenticating proxy servlet (each request is forwarded with BASIC AUTH)
     final ServletHolder proxyServlet = new ServletHolder(TransparentProxyServlet.class);
     proxyServlet.setInitParameter("ProxyTo", proxyTo);
