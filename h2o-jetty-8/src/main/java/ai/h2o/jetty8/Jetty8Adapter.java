@@ -55,8 +55,6 @@ public class Jetty8Adapter {
   private String _ip;
   private int _port;
 
-  private Server jettyServer;
-
   private Jetty8Adapter(H2OHttpServer h2oHttpServer) {
     this.h2oHttpServer = h2oHttpServer;
     this.config = h2oHttpServer.getConfig();
@@ -65,15 +63,25 @@ public class Jetty8Adapter {
   static H2OServletContainer createServerAdapter(final H2OHttpServer h2oHttpServer) {
     return new H2OServletContainer() {
       private final Jetty8Adapter adapter = new Jetty8Adapter(h2oHttpServer);
+      private Server jettyServer;
 
       @Override
       public void start(String ip, int port) throws Exception {
-        adapter.start(ip, port);
+        jettyServer = adapter.createJettyServer(ip, port);
+        jettyServer.start();
       }
 
+      /**
+       * Stop Jetty server after it has been started.
+       * This is unlikely to ever be called by H2O until H2O supports graceful shutdown.
+       *
+       * @throws Exception -
+       */
       @Override
       public void stop() throws Exception {
-        adapter.stop();
+        if (jettyServer != null) {
+          jettyServer.stop();
+        }
       }
     };
   }
@@ -89,7 +97,8 @@ public class Jetty8Adapter {
 
       @Override
       public void start(String ip, int port) throws Exception {
-        adapter.start(ip, port);
+        final Server jettyServer = adapter.createJettyServer(ip, port);
+        jettyServer.start();
       }
     };
   }
@@ -100,25 +109,20 @@ public class Jetty8Adapter {
     System.setProperty("org.eclipse.jetty.server.Request.maxFormContentSize", Integer.toString(Integer.MAX_VALUE));
   }
 
-  /**
-   * Choose a Port and IP address and start the Jetty server.
-   *
-   * @throws Exception -
-   */
-  private void start(String ip, int port) throws Exception {
+  private Server createJettyServer(String ip, int port) {
     final boolean useHttps = config.jks != null;
     setup(ip, port);
-    jettyServer = new Server();
+
+    final Server jettyServer = new Server();
     jettyServer.setSendServerVersion(false);
 
     final Connector connector = useHttps ? createHttpsConnector() : createHttpConnector();
     jettyServer.setConnectors(new Connector[]{connector});
-    createServer();
-
-    jettyServer.start();
+    createServer(jettyServer);
+    return jettyServer;
   }
 
-  private void createServer() {
+  private void createServer(Server jettyServer) {
     if (config.loginType != LoginType.NONE) {
       // REFER TO http://www.eclipse.org/jetty/documentation/9.1.4.v20140401/embedded-examples.html#embedded-secured-hello-handler
       final LoginService loginService;
@@ -235,18 +239,6 @@ public class Jetty8Adapter {
 
   private static int getSysPropInt(String suffix, int defaultValue) {
     return Integer.getInteger(WebServerConfig.SYSTEM_PROP_PREFIX + suffix, defaultValue);
-  }
-
-  /**
-   * Stop Jetty server after it has been started.
-   * This is unlikely to ever be called by H2O until H2O supports graceful shutdown.
-   *
-   * @throws Exception -
-   */
-  private void stop() throws Exception {
-    if (jettyServer != null) {
-      jettyServer.stop();
-    }
   }
 
   /**
