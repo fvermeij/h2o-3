@@ -33,6 +33,19 @@ public class H2OHttpServerImpl implements H2OHttpServer {
     _acceptRequests = true;
   }
 
+  /**
+   * @return URI scheme
+   */
+  @Override
+  public String getScheme() {
+    if (config.jks != null) {
+      return "https";
+    }
+    else {
+      return "http";
+    }
+  }
+
   @Override
   public boolean authenticationHandler(HttpServletRequest request, HttpServletResponse response) throws IOException {
     if (!config.loginType.isJaas()) {

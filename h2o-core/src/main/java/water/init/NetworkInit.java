@@ -48,6 +48,8 @@ public class NetworkInit {
 
   public static ServerSocketChannel _tcpSocket;
 
+  public static H2OHttpServerImpl h2oHttpServer;
+
   public static InetAddress findInetAddressForSelf() throws Error {
     if (H2O.SELF_ADDRESS != null)
       return H2O.SELF_ADDRESS;
@@ -75,10 +77,10 @@ public class NetworkInit {
     // Assign initial ports
     H2O.API_PORT = H2O.ARGS.port == 0 ? H2O.ARGS.baseport : H2O.ARGS.port;
 
-    // Late instantiation of Jetty object, if needed.
+    // Late instantiation of web server, if needed.
     if (H2O.getServletContainer() == null && !H2O.ARGS.disable_web) {
       final WebServerConfig config = webServerParams(H2O.ARGS);
-      final H2OHttpServerImpl h2oHttpServer = new H2OHttpServerImpl(config);
+      h2oHttpServer = new H2OHttpServerImpl(config);
       H2O.setServletContainer(H2OServletContainerLoader.INSTANCE.createServletContainer(h2oHttpServer));
     }
 
@@ -148,7 +150,7 @@ public class NetworkInit {
     H2O.SELF = H2ONode.self(H2O.SELF_ADDRESS);
     if (!H2O.ARGS.disable_web) {
       Log.info("Internal communication uses port: ", H2O.H2O_PORT, "\n" +
-          "Listening for HTTP and REST traffic on " + H2O.getURL(H2O.getServletContainer().getScheme()) + "/");
+          "Listening for HTTP and REST traffic on " + H2O.getURL(h2oHttpServer.getScheme()) + "/");
     }
     try {
       Log.debug("Interface MTU: ", (NetworkInterface.getByInetAddress(H2O.SELF_ADDRESS)).getMTU());

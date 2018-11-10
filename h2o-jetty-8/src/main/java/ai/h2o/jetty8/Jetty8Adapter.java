@@ -61,18 +61,6 @@ public class Jetty8Adapter implements H2OServletContainer {
     this.config = h2oHttpServer.getConfig();
   }
 
-  /**
-   * @return URI scheme
-   */
-  public String getScheme() {
-    if (config.jks != null) {
-      return "https";
-    }
-    else {
-      return "http";
-    }
-  }
-
   private void setup(String ip, int port) {
     _ip = ip;
     _port = port;
@@ -243,11 +231,6 @@ public class Jetty8Adapter implements H2OServletContainer {
     if (jettyServer != null) {
       jettyServer.stop();
     }
-  }
-
-  @Override
-  public void acceptRequests() {
-    h2oHttpServer.acceptRequests(); //TODO eliminate this; it should be called on h2o side internally
   }
 
   /**

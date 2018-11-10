@@ -13,11 +13,6 @@ public class Jetty8Proxy implements H2OProxy {
   }
 
   @Override
-  public String getScheme() {
-    throw new UnsupportedOperationException(); // TODO
-  }
-
-  @Override
   public int getPort() {
     throw new UnsupportedOperationException(); // TODO
   }

@@ -20,6 +20,7 @@ import org.apache.hadoop.util.ToolRunner;
 import water.H2O;
 import water.H2OStarter;
 import water.ProxyStarter;
+import water.init.NetworkInit;
 import water.network.SecurityUtils;
 import water.util.ArrayUtils;
 import water.util.StringUtils;
@@ -185,7 +186,7 @@ public class h2odriver extends Configured implements Tool {
   public String getPublicUrl() {
     String url;
     if (client) {
-      url = H2O.getURL(H2O.getServletContainer().getScheme());
+      url = H2O.getURL(NetworkInit.h2oHttpServer.getScheme());
     } else if (proxy) {
       url = proxyUrl;
     } else {

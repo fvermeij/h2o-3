@@ -8,6 +8,8 @@ import java.util.Collection;
 public interface H2OHttpServer {
   void acceptRequests();
 
+  String getScheme();
+
   boolean authenticationHandler(HttpServletRequest request, HttpServletResponse response) throws IOException;
 
   void gateHandler(HttpServletRequest request, HttpServletResponse response);

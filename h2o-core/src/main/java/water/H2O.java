@@ -1558,7 +1558,7 @@ final public class H2O {
       Log.info("If you have trouble connecting, try SSH tunneling from your local machine (e.g., via port 55555):\n" +
               "  1. Open a terminal and run 'ssh -L 55555:localhost:"
               + API_PORT + " " + System.getProperty("user.name") + "@" + SELF_ADDRESS.getHostAddress() + "'\n" +
-              "  2. Point your browser to " + servletContainer.getScheme() + "://localhost:55555");
+              "  2. Point your browser to " + NetworkInit.h2oHttpServer.getScheme() + "://localhost:55555");
     }
 
     // Create the starter Cloud with 1 member
@@ -1629,7 +1629,7 @@ final public class H2O {
    */
   public static void startServingRestApi() {
     if (!H2O.ARGS.disable_web) {
-      servletContainer.acceptRequests();
+      NetworkInit.h2oHttpServer.acceptRequests();
     }
   }
 
