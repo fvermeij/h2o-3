@@ -4,6 +4,7 @@ import ai.h2o.jetty8.proxy.ProxyLoginHandler;
 import ai.h2o.jetty8.proxy.TransparentProxyServlet;
 import ai.h2o.webserver.iface.Credentials;
 import ai.h2o.webserver.iface.H2OHttpServer;
+import ai.h2o.webserver.iface.H2OProxy;
 import ai.h2o.webserver.iface.H2OServletContainer;
 import ai.h2o.webserver.iface.LoginType;
 import ai.h2o.webserver.iface.RequestAuthExtension;
@@ -59,6 +60,22 @@ public class Jetty8Adapter implements H2OServletContainer {
   Jetty8Adapter(H2OHttpServer h2oHttpServer) {
     this.h2oHttpServer = h2oHttpServer;
     this.config = h2oHttpServer.getConfig();
+  }
+
+  static H2OProxy createProxyAdapter(final H2OHttpServer h2oHttpServer, Credentials credentials, String proxyTo) {
+    return new H2OProxy() {
+      private final Jetty8Adapter adapter = new Jetty8Adapter(h2oHttpServer);
+
+      @Override
+      public int getPort() {
+        return adapter._port;
+      }
+
+      @Override
+      public void start(String ip, int port) throws Exception {
+        adapter.start(ip, port);
+      }
+    };
   }
 
   private void setup(String ip, int port) {

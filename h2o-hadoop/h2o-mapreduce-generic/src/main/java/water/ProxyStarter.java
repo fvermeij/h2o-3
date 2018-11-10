@@ -1,6 +1,8 @@
 package water;
 
+import ai.h2o.webserver.H2OHttpServerImpl;
 import ai.h2o.webserver.iface.Credentials;
+import ai.h2o.webserver.iface.H2OHttpServer;
 import ai.h2o.webserver.iface.H2OProxy;
 import ai.h2o.webserver.iface.H2OServletContainerLoader;
 import ai.h2o.webserver.iface.WebServerConfig;
@@ -23,14 +25,15 @@ public class ProxyStarter {
 
     final H2O.OptArgs baseArgs = H2O.parseH2OArgumentsTo(args, new H2O.OptArgs());
     final WebServerConfig config = NetworkInit.webServerParams(baseArgs);
-    final H2OProxy proxy = initializeProxy(config, credentials, proxyTo);
+    final H2OHttpServer h2oDock = new H2OHttpServerImpl(config);
+    final H2OProxy proxy = initializeProxy(h2oDock, credentials, proxyTo);
 
     InetAddress address = HostnameGuesser.findInetAddressForSelf(baseArgs.ip, baseArgs.network);
     if (useHostname) {
       String hostname = localIpToHostname(address);
-      return H2O.getURL(proxy.getScheme(), hostname, proxy.getPort(), baseArgs.context_path);
+      return H2O.getURL(h2oDock.getScheme(), hostname, proxy.getPort(), baseArgs.context_path);
     } else {
-      return H2O.getURL(proxy.getScheme(), address, proxy.getPort(), baseArgs.context_path);
+      return H2O.getURL(h2oDock.getScheme(), address, proxy.getPort(), baseArgs.context_path);
     }
   }
 
@@ -46,10 +49,10 @@ public class ProxyStarter {
     return hostname;
   }
 
-  private static H2OProxy initializeProxy(WebServerConfig config, Credentials credentials, String proxyTo) {
+  private static H2OProxy initializeProxy(H2OHttpServer h2oDock, Credentials credentials, String proxyTo) {
+    final WebServerConfig config = h2oDock.getConfig();
     int proxyPort = config.port == 0 ? config.baseport : config.port;
-
-    final H2OProxy proxy = H2OServletContainerLoader.INSTANCE.createProxy(config, credentials, proxyTo);
+    final H2OProxy proxy = H2OServletContainerLoader.INSTANCE.createProxy(h2oDock, credentials, proxyTo);
 
     // PROXY socket is only used to find opened port on given ip
     ServerSocket proxySocket = null;

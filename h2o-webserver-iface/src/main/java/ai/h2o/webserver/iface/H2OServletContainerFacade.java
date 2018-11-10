@@ -10,5 +10,5 @@ package ai.h2o.webserver.iface;
 public interface H2OServletContainerFacade {
   H2OServletContainer createServletContainer(H2OHttpServer params);
 
-  H2OProxy createProxy(WebServerConfig args, Credentials credentials, String proxyTo);
+  H2OProxy createProxy(H2OHttpServer h2oHttpServer, Credentials credentials, String proxyTo);
 }
