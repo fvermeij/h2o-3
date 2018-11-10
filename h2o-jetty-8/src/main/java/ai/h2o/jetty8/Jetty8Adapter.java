@@ -47,7 +47,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class Jetty8Adapter implements H2OServletContainer {
+public class Jetty8Adapter {
 
   private final WebServerConfig config;
   private final H2OHttpServer h2oHttpServer;
@@ -57,9 +57,25 @@ public class Jetty8Adapter implements H2OServletContainer {
 
   private Server jettyServer;
 
-  Jetty8Adapter(H2OHttpServer h2oHttpServer) {
+  private Jetty8Adapter(H2OHttpServer h2oHttpServer) {
     this.h2oHttpServer = h2oHttpServer;
     this.config = h2oHttpServer.getConfig();
+  }
+
+  static H2OServletContainer createServerAdapter(final H2OHttpServer h2oHttpServer) {
+    return new H2OServletContainer() {
+      private final Jetty8Adapter adapter = new Jetty8Adapter(h2oHttpServer);
+
+      @Override
+      public void start(String ip, int port) throws Exception {
+        adapter.start(ip, port);
+      }
+
+      @Override
+      public void stop() throws Exception {
+        adapter.stop();
+      }
+    };
   }
 
   static H2OProxy createProxyAdapter(final H2OHttpServer h2oHttpServer, Credentials credentials, String proxyTo) {
@@ -89,7 +105,7 @@ public class Jetty8Adapter implements H2OServletContainer {
    *
    * @throws Exception -
    */
-  public void start(String ip, int port) throws Exception {
+  private void start(String ip, int port) throws Exception {
     final boolean useHttps = config.jks != null;
     setup(ip, port);
     jettyServer = new Server();
@@ -227,7 +243,7 @@ public class Jetty8Adapter implements H2OServletContainer {
    *
    * @throws Exception -
    */
-  public void stop() throws Exception {
+  private void stop() throws Exception {
     if (jettyServer != null) {
       jettyServer.stop();
     }
