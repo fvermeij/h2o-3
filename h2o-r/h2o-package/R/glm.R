@@ -40,9 +40,8 @@
 #' @param tweedie_link_power Tweedie link power Defaults to 1.
 #' @param solver AUTO will set the solver based on given data and the other parameters. IRLSM is fast on on problems with small
 #'        number of predictors and for lambda-search with L1 penalty, L_BFGS scales better for datasets with many
-#'        columns. Must be one of: "AUTO", "IRLSM", "L_BFGS",
-#'        "COORDINATE_DESCENT_NAIVE", "COORDINATE_DESCENT", "GRADIENT_DESCENT_LH", "GRADIENT_DESCENT_SQERR". Defaults to
-#'        AUTO.
+#'        columns. Must be one of: "AUTO", "IRLSM", "L_BFGS", "COORDINATE_DESCENT_NAIVE", "COORDINATE_DESCENT",
+#'        "GRADIENT_DESCENT_LH", "GRADIENT_DESCENT_SQERR". Defaults to AUTO.
 #' @param alpha Distribution of regularization between the L1 (Lasso) and L2 (Ridge) penalties. A value of 1 for alpha
 #'        represents Lasso regression, a value of 0 produces Ridge regression, and anything in between specifies the
 #'        amount of mixing between the two. Default value of alpha is 0 when SOLVER = 'L-BFGS'; 0.5 otherwise.
@@ -88,6 +87,7 @@
 #' @param interactions A list of predictor column indices to interact. All pairwise combinations will be computed for the list.
 #' @param interaction_pairs A list of pairwise (first order) column interactions.
 #' @param obj_reg Likelihood divider in objective value computation, default is 1/nobs Defaults to -1.
+#' @param export_checkpoints_dir Automatically export generated models to this directory.
 #' @param balance_classes \code{Logical}. Balance training data class counts via over/under-sampling (for imbalanced data). Defaults to
 #'        FALSE.
 #' @param class_sampling_factors Desired over/under-sampling ratios per class (in lexicographic order). If not specified, sampling factors will
@@ -180,6 +180,7 @@ h2o.glm <- function(x, y, training_frame,
                     interactions = NULL,
                     interaction_pairs = NULL,
                     obj_reg = -1,
+                    export_checkpoints_dir = NULL,
                     balance_classes = FALSE,
                     class_sampling_factors = NULL,
                     max_after_balance_size = 5.0,
@@ -305,6 +306,8 @@ h2o.glm <- function(x, y, training_frame,
     parms$interaction_pairs <- interaction_pairs
   if (!missing(obj_reg))
     parms$obj_reg <- obj_reg
+  if (!missing(export_checkpoints_dir))
+    parms$export_checkpoints_dir <- export_checkpoints_dir
   if (!missing(balance_classes))
     parms$balance_classes <- balance_classes
   if (!missing(class_sampling_factors))

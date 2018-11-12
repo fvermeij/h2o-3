@@ -10,6 +10,7 @@ import water.rapids.ast.prims.advmath.AstKFold;
 import water.udf.CFuncRef;
 import water.util.*;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.*;
 
@@ -213,6 +214,7 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
         Scope.enter();
         _parms.read_lock_frames(_job); // Fetch & read-lock input frames
         computeImpl();
+        saveModelCheckpointIfConfigured();
       } finally {
         setFinalState();
         _parms.read_unlock_frames(_job);
@@ -231,6 +233,17 @@ abstract public class ModelBuilder<M extends Model<M,P,O>, P extends Model.Param
     if (res != null && res._output != null) {
       res._output._job = _job;
       res._output.stopClock();
+    }
+  }
+
+  private void saveModelCheckpointIfConfigured() {
+    Model model = _result.get();
+    if (model != null && !StringUtils.isNullOrEmpty(model._parms._export_checkpoints_dir)) {
+      try {
+        model.exportBinaryModel(model._parms._export_checkpoints_dir + "/" + model._key.toString(), true);
+      } catch (IOException e) {
+        throw new H2OIllegalArgumentException("export_checkpoints_dir", "saveModelIfConfigured", e);
+      }
     }
   }
 
